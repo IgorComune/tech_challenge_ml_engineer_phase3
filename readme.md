@@ -30,7 +30,6 @@ This Amazon Delivery Dataset provides a comprehensive view of the company's last
 ##### Category: Product category of the ordered item (e.g., electronics, apparel, groceries)
 
 # Install 
-python -m venv .venv
-.venv/Scripts/activate
-python.exe -m pip install --upgrade pip
-pip install -r requirements.txt
+Create a conda env with `Python version 3.12.11`
+Open VS via `Anaconda Navigator`
+Open terminal and type: `pip install -r requirements.txt`
