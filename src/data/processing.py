@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pandas import DataFrame, Series
 import pandas as pd
+import sidetable as stb
 from ipywidgets import interact, HTML, Output, Dropdown, VBox, interactive
 from IPython.display import display, HTML
 from sklearn.preprocessing import PowerTransformer
@@ -66,7 +67,7 @@ def filtragem_interativa_valores_categoricos(df: DataFrame, coluna: str) -> Data
 
         return filtro
 
-def filtrar_feature_valor_categorico(df: DataFrame, query:str) -> DataFrame:
+def filtrar_dataset(df: DataFrame, query:str) -> DataFrame:
     """Função que aplica um filtro em uma variável categorica ou em um conjunto delas através do método df.query"""
     try:
         output = df.query(query)
