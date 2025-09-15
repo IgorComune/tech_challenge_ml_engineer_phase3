@@ -3,12 +3,9 @@
 
 This project was developed as part of Phase 3 Tech Challenge, focusing on delivery time prediction (ETA) using Amazon Delivery data. The goal is to create a complete Machine Learning model with data pipeline, API, storage, and visualization interface.
 
-## 🎯 Project Objectives
+## 🎯 Project Objective
 
 - **ETA Prediction** = Customer satisfaction
-- **Productivity** = Reduce operational costs  
-- **Anomaly Detection** = Avoid hidden losses
-- **Problem Areas Identification** = Strategic logistics network planning
 
 ## 📊 Dataset
 
