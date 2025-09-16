@@ -525,6 +525,21 @@ docs = ["sphinx (>=5,<7)", "sphinx-autodoc-typehints", "sphinx-rtd-theme (>=0.2.
 test = ["coverage", "pytest (>=7,<8.1)", "pytest-cov", "pytest-mock (>=3)"]
 
 [[package]]
+name = "holidays"
+version = "0.81"
+description = "Open World Holidays Framework"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "holidays-0.81-py3-none-any.whl", hash = "sha256:1c6657ff50aa760c9503610ad5e81612ae2457d2b70a2291ca61637c938ba919"},
+    {file = "holidays-0.81.tar.gz", hash = "sha256:d4eb4624f5a0a1d6c8f9577f0b6d028d610fedf610c0aeb4942e8730ba090a55"},
+]
+
+[package.dependencies]
+python-dateutil = "*"
+
+[[package]]
 name = "ipykernel"
 version = "6.30.1"
 description = "IPython Kernel for Jupyter"
@@ -2306,4 +2321,4 @@ scikit-learn = ["scikit-learn"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "ee7c3d6156b913d576d3a253a676c91d7103822bccfcfb630ad0ff27a463865a"
+content-hash = "5cbd75e55abb2751fffdce88a09709af3fbea6db2623d48fc115c2eb2b000e95"

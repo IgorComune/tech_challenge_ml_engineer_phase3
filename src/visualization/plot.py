@@ -4,13 +4,16 @@ from ipywidgets import interact
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
-from pandas import DataFrame
+from pandas import DataFrame, Series
 import missingno as msno
 import sidetable as stb
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, RobustScaler
 import seaborn as sns
 from scipy import stats
+import plotly.express as px
+from typing import Dict, Any
+sns.set_style("darkgrid")
 
 # instância do objeto logger
 logger = logging.getLogger(__name__)
@@ -24,7 +27,6 @@ def matriz_valores_nulos(df:DataFrame)-> plt.plot:
     
     except Exception as e:
         logger.error(f"Erro: {e}")
-
 
 def grafico_qq_plot(df: pd.DataFrame, interativo: bool = False, col_cat: str = None):
     """
@@ -63,7 +65,6 @@ def grafico_qq_plot(df: pd.DataFrame, interativo: bool = False, col_cat: str = N
 
     except Exception as e:
         logger.error(f"Erro: {e}")
-
 
 def grafico_boxplot(df: pd.DataFrame, interativo:bool=None, cat_col: str=None) -> plt.plot:
     """
@@ -126,6 +127,7 @@ def grafico_boxplot(df: pd.DataFrame, interativo:bool=None, cat_col: str=None) -
         logger.error(f"Erro: {e}")
 
 
+
 def boxplot_comparativo_escalonamento_dados(df: pd.DataFrame, scale:str='StandardScaler') -> plt.plot:
     "Função que retorna um gráfico comparativo entre os dados com e sem escalonamento."
     
@@ -154,6 +156,53 @@ def boxplot_comparativo_escalonamento_dados(df: pd.DataFrame, scale:str='Standar
     except Exception as e:
         return logger.error(e)
 
+def grafico_dispersao(df: DataFrame, y:Series, x:Series, titulo:str, xlabel:str, ylabel:str, interativo:bool=None, feature:str = None, res:bool=None, 
+                      hue:Series=None, size:Series=None) -> plt.plot:
+    """
+    Gera um gráfico de dispersão.
+    - interativo=True: adiciona um seletor interativo para filtrar pela coluna `feature`.
+    - res=True: adiciona linha horizontal y=0.
+    """
+    try:
+        def plot(valor_feature=None):
+            plot_df = df.copy()
+            if feature is not None and valor_feature is not None:
+                plot_df = plot_df[plot_df[feature] == valor_feature]
+            
+            plt.figure(figsize=(10,5))
+            sns.scatterplot(data=plot_df, x=x, y=y, hue=hue, size=size, legend="full")
+            if res:
+                plt.axhline(y=0, color='red', linestyle='--', linewidth=2)
+                plt.xlim(-5,5)
+                plt.ylim(-10,10)
+            plt.xlabel(xlabel)
+            plt.ylabel(ylabel)
+            plt.title(titulo)
+            plt.tight_layout()
+            plt.show()
+        
+        if interativo and feature is not None:
+            if feature not in df.columns:
+                raise logger.warning(f"Coluna '{feature}' não existe no DataFrame.")
+            valores = df[feature].dropna().unique()
+            interact(plot, valor_feature=valores)
+        else:
+            plot()
+
+    except Exception as e:
+        return logger.error(e)
+    
+def grafico_pairplot_target(df:DataFrame, target:str, lista_features:list[str]) -> plt.plot:
+       """Função que retorna um gráfico pairplot das variáveis numéricas correlacionadas com o target indicado.
+       
+       :params df: Dataframe
+       :params target: feature alvo da previsão.
+       :params lista_features: lista de features para avaliar a correlação dos dados com o target.
+
+       """
+       ax = sns.pairplot(data=df, y_vars=target, x_vars=lista_features)
+       ax.figure.suptitle('Gráfico de dispersão das variáveis', y=1.05)
+       return plt.show()
 
 def grafico_histograma(df: pd.DataFrame, interativo: bool = False, feature: str = None):
     """
@@ -184,7 +233,6 @@ def grafico_histograma(df: pd.DataFrame, interativo: bool = False, feature: str 
     else:
         plot(df)
 
-
 def grafico_heatmap(df: pd.DataFrame, interativo: bool = False, col_cat: str = None):
     """
     Cria heatmap de correlação dos dados numéricos.
@@ -209,3 +257,126 @@ def grafico_heatmap(df: pd.DataFrame, interativo: bool = False, col_cat: str = N
 
     except Exception as e:
         logger.error(f"Erro: {e}")
+
+def grafico_pairplot_target(df:DataFrame, target:str, lista_features:list[str], tipo:str='reg') -> plt.plot:
+       """Função que retorna um gráfico pairplot das variáveis numéricas correlacionadas com o target indicado.
+       :params df: Dataframe
+       :params target: feature alvo da previsão.
+       :params lista_features: lista de features para avaliar a correlação dos dados com o target.
+       """
+       try:
+            if tipo=='reg':
+                dict_line ={'line_kws':{'color':'red'}}   
+            else:
+                dict_line=None 
+
+            ax = sns.pairplot(data=df, y_vars=target, x_vars=lista_features, kind=tipo, plot_kws=dict_line)
+            ax.figure.suptitle('Gráfico de dispersão das variáveis', y=1.05)
+            return plt.show()
+       except Exception as e:
+           logger.error(e)
+
+def grafico_coluna(df, x_col, y_col, hue_col=None, title=None):
+    """
+    Cria um gráfico de colunas com a opção de um hue categórico.
+
+    params:
+        df (pd.DataFrame): O DataFrame com os dados.
+        x_col (str): O nome da coluna para o eixo X (variável categórica).
+        y_col (str): O nome da coluna para o eixo Y (variável numérica).
+        hue_col (str, opcional): O nome da coluna para a cor (hue). Padrão é None.
+        title (str, opcional): O título do gráfico.
+    """
+    # Define o tamanho da figura
+    plt.figure(figsize=(10, 6))
+
+    # Cria o gráfico de colunas
+    ax = sns.barplot(
+        data=df,
+        x=x_col,
+        y=y_col,
+        hue=hue_col,
+        errorbar=None, # Remove a barra de erro para simplificar o exemplo
+        palette='pastel'
+    )
+
+    # Adiciona o título, se fornecido
+    if title:
+        plt.title(title, fontsize=16)
+
+    # Melhora a visualização
+    plt.xlabel(x_col, fontsize=12)
+    plt.ylabel(f'Média de {y_col}', fontsize=12)
+    plt.xticks(rotation=45, ha='right') # Rotaciona os rótulos do eixo X para melhor visualização
+    plt.tight_layout() # Ajusta o layout para evitar sobreposições
+    plt.show()
+
+def gerar_mapa_scatter_plot(
+    df: pd.DataFrame,
+        lat_col: str,
+        lon_col: str,
+        color_col: str=None,
+        size_col: str=None,
+        hover_name_col: str=None,
+        hover_data_dict: Dict[str, Any]=None,
+        center: Dict[str, float] = None,
+        zoom: int = 1,
+        height:int=None,
+        title: str = "Mapa de Dispersão",
+        jitter_amount: float = 0.005
+    ):
+        """
+        params:
+            df (pd.DataFrame): O DataFrame a ser usado.
+            lat_col (str): Nome da coluna para a latitude.
+            lon_col (str): Nome da coluna para a longitude.
+            color_col (str): Nome da coluna para a cor dos pontos.
+            size_col (str): Nome da coluna para o tamanho dos pontos.
+            hover_name_col (str): Nome da coluna para o nome ao passar o mouse.
+            hover_data_dict (Dict[str, Any]): Dicionário com dados adicionais para o tooltip.
+            zoom (int): Nível de zoom do mapa.
+            center_lat (float): Latitude do centro do mapa.
+            center_lon (float): Longitude do centro do mapa.
+            title (str): Título do mapa.
+            jitter_amount (float): Quantidade de jitter a ser adicionada para evitar sobreposição.
+        """
+        # Adiciona jitter às coordenadas para evitar sobreposição
+        df_temp = df.copy()
+        df_temp[f'{lat_col}_jittered'] = df_temp[lat_col] + np.random.uniform(-jitter_amount, jitter_amount, size=len(df_temp))
+        df_temp[f'{lon_col}_jittered'] = df_temp[lon_col] + np.random.uniform(-jitter_amount, jitter_amount, size=len(df_temp))
+
+        fig = px.scatter_map(
+            df_temp,
+            lat=f'{lat_col}_jittered',
+            lon=f'{lon_col}_jittered',
+            color=color_col,
+            size=size_col,
+            hover_name=hover_name_col,
+            hover_data=hover_data_dict,
+            zoom=zoom,
+            center=center,
+            height=height,
+            title=title
+        )
+        
+        # Define o estilo de mapa padrão
+        fig.update_layout(mapbox_style="carto-positron")
+        
+        fig.show()
+
+def grafico_replot(df:DataFrame, x:str, y:str, col_div:str, linha_div:str,  hue:str, tipo:str='scatter', figsize:tuple=(12,8), titulo:str=None) ->plt.plot:
+    # Define o tamanho do gráfico
+    plt.figure(figsize=figsize)
+
+    sns.relplot(
+        data=df,
+        x=x,
+        y=y,
+        col=col_div,  
+        row=linha_div,
+        hue=hue,
+        kind=tipo
+    )
+
+    plt.suptitle(titulo, y=1.02)
+    return plt.show()
