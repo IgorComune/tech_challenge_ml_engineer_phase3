@@ -1,18 +1,17 @@
 """Funções de tratamento dos dados"""
 import logging
-from geopy.geocoders import Nominatim
-from geopy.extra.rate_limiter import RateLimiter
 from pandas import DataFrame, Series
 import holidays
 import pandas as pd
 import numpy as np
-import datetime
 import sidetable as stb
 from ipywidgets import interact
 from IPython.display import display, HTML
 from sklearn.preprocessing import PowerTransformer
+from sklearn.preprocessing import OneHotEncoder
 from typing import Optional
-from geopy.distance import geodesic, great_circle
+from geopy.distance import great_circle
+from category_encoders import TargetEncoder
 
 # instância do objeto logger
 logger = logging.getLogger(__name__)
@@ -189,3 +188,24 @@ def power_transform(df: pd.DataFrame,cat_col: str=None,metodo: str = 'yeo-johnso
         
     except Exception as e:
         logger.error(e)
+
+
+def target_encoding(feature:Series, dados_ajuste:DataFrame, target:Series):
+    """Função que realiza o encoding de feature categórica com alta dimensaionalidade 
+    de categorias a partir da representação dessa feature no target.
+    
+    """
+    encoder = TargetEncoder(cols=[feature])
+    encoder.fit(dados_ajuste, target)
+    dados_encoded = encoder.transform(dados_ajuste)
+    return dados_encoded
+
+def one_hot_encoding(dados_ajuste:DataFrame, target:Series):
+    """Função que realiza o encoding de feature categóricas transformando os valores categoricos em colunas booleanas.
+    
+    """
+    encoder = OneHotEncoder()
+    encoder.fit(dados_ajuste, target)
+    dados_encoded = encoder.transform(dados_ajuste)
+    df_tratado = pd.DataFrame(dados_encoded.toarray(), columns=encoder.get_feature_names_out())
+    return df_tratado
