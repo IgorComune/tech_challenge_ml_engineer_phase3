@@ -127,7 +127,6 @@ def grafico_boxplot(df: pd.DataFrame, interativo:bool=None, cat_col: str=None) -
         logger.error(f"Erro: {e}")
 
 
-
 def boxplot_comparativo_escalonamento_dados(df: pd.DataFrame, scale:str='StandardScaler') -> plt.plot:
     "Função que retorna um gráfico comparativo entre os dados com e sem escalonamento."
     
@@ -155,6 +154,58 @@ def boxplot_comparativo_escalonamento_dados(df: pd.DataFrame, scale:str='Standar
 
     except Exception as e:
         return logger.error(e)
+
+def boxplot_comparativo_escalonamento_entre_dfs(df1: DataFrame, cols_df1: list, df2: DataFrame, cols_df2: list, title1: str, title2: str, scale: str = 'StandardScaler') -> plt.plot:
+    """
+    Escalona e compara dois DataFrames usando box plots.
+
+    params:
+        df1 (DataFrame): O primeiro DataFrame para escalonar e plotar.
+        cols_df1 (list): Uma lista de colunas do df1 a serem escalonadas e plotadas.
+        df2 (DataFrame): O segundo DataFrame para escalonar e plotar.
+        cols_df2 (list): Uma lista de colunas do df2 a serem escalonadas e plotadas.
+        title1 (str): O título para o primeiro gráfico.
+        title2 (str): O título para o segundo gráfico.
+        scale (str): O método de escalonamento a ser usado ('StandardScaler' ou 'RobustScaler').
+
+    return:
+        plt.plot: Exibe o gráfico.
+    """
+    try:
+        if scale == 'StandardScaler':
+            scaler = StandardScaler()
+        elif scale == 'RobustScaler':
+            scaler = RobustScaler()
+        else:
+            raise ValueError("Método de escalonamento inválido. Use 'StandardScaler' ou 'RobustScaler'.")
+        
+        logger.info(f"Método de escalonamento: {scale}")
+
+        # Escalonar os dados do primeiro DataFrame
+        df1_features = df1[cols_df1]
+        df1_scaled = pd.DataFrame(scaler.fit_transform(df1_features), columns=df1_features.columns)
+
+        # Escalonar os dados do segundo DataFrame
+        df2_features = df2[cols_df2]
+        df2_scaled = pd.DataFrame(scaler.fit_transform(df2_features), columns=df2_features.columns)
+
+        # Criar a figura com dois subplots lado a lado
+        fig, axs = plt.subplots(ncols=2, figsize=(20, 8))
+
+        # Plotar os box plots nos respectivos subplots
+        df1_scaled.plot.box(ax=axs[0], title=title1)
+        df2_scaled.plot.box(ax=axs[1], title=title2)
+
+        # Ajustar automaticamente os rótulos do eixo x
+        fig.autofmt_xdate(rotation=60, ha='right')
+        
+        # Exibir os gráficos
+        plt.show()
+    
+    except Exception as e:
+        logger.error(e)
+
+
 
 def grafico_dispersao(df: DataFrame, y:Series, x:Series, titulo:str, xlabel:str, ylabel:str, interativo:bool=None, feature:str = None, res:bool=None, 
                       hue:Series=None, size:Series=None) -> plt.plot:
