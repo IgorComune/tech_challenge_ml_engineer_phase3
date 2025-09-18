@@ -1,6 +1,8 @@
 """Função para manipulação de datasets"""
 import logging
 import pandas as pd
+
+
 # instância do objeto logger
 logger = logging.getLogger(__name__)
 

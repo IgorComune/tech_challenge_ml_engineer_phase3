@@ -13,16 +13,20 @@ from typing import Optional
 from geopy.distance import great_circle
 from category_encoders import TargetEncoder
 
+
 # instância do objeto logger
 logger = logging.getLogger(__name__)
+
 
 def amostra_dados(df: DataFrame) -> DataFrame:
     """Função para retornar a amostragem dos dados"""
     return df.sample(3)
 
+
 def contagem_valores(coluna:Series) -> None: 
     """Função que realiza a contagem de valores por coluna"""
     return coluna.value_counts()
+
 
 def dados_temporais(df: DataFrame, data:Series) -> DataFrame:
     """Função que insere colunas com dados temporais a partir do index do Dataframe"""
@@ -31,9 +35,11 @@ def dados_temporais(df: DataFrame, data:Series) -> DataFrame:
 
     # criação do objeto com os feriados brasileiros
     india_holidays = holidays.India()
-    df['Feriado'] = df.index.to_series().apply(lambda x: x in india_holidays)
+    df['holiday'] = df.index.to_series().apply(lambda x: x in india_holidays)
+    df['weekend'] = df['dayofweek'].isin([5, 6]).astype(int)
 
     return df
+
 
 def transformacao_ciclica(df: DataFrame, dias_uteis:bool=False) -> DataFrame:
     """Transformação cíclica"""
@@ -58,10 +64,12 @@ def transformacao_ciclica(df: DataFrame, dias_uteis:bool=False) -> DataFrame:
         logger.error(e)
     return df
 
+
 def verificacao_nulos(df:DataFrame) -> Series:
     """Função que realiza a contagem de valores nulos por feature do dataset"""
     output = df.isna().sum()
     return output
+
 
 def filtrar_linhas_valores_nulos(df:DataFrame) -> DataFrame:
     """Função que aplica o filtro de valores nulos no dataframe e retorna um dataframe filtrado com a correspondência."""
@@ -69,9 +77,11 @@ def filtrar_linhas_valores_nulos(df:DataFrame) -> DataFrame:
     logger.info(f"Contagem de linhas nulas para o dataframe:{output.shape[0]}")
     return output
 
+
 def frequencia_valores_nulos(df:DataFrame) -> DataFrame:
     """Função que gera uma matriz esparsa com a visualização dos valores nulos intercalado com valores preenchidos por coluna"""
     return df.stb.missing()
+
 
 def verificar_linhas_duplicadas(df:DataFrame) -> DataFrame:
     """Função que retorna um dataframe contendo as linhas duplicadas do dataset inputado."""
@@ -85,10 +95,12 @@ def verificar_linhas_duplicadas(df:DataFrame) -> DataFrame:
     )
     return output
 
+
 def remover_duplicados(df: DataFrame, coluna: str) -> DataFrame:
     """Função para remoção de valores duplicados."""
     df.drop_duplicates(subset=[coluna], keep='first', inplace=True)
     return df
+
 
 def filtragem_interativa_valores_categoricos(df: DataFrame, coluna: str) -> DataFrame:
     """Função que aplica um filtro iterativo para selecionar os dados do dataset a partir dos valores da coluna selecionada."""
@@ -100,6 +112,7 @@ def filtragem_interativa_valores_categoricos(df: DataFrame, coluna: str) -> Data
 
         return filtro
 
+
 def filtrar_dataset(df: DataFrame, query:str) -> DataFrame:
     """Função que aplica um filtro em uma variável categorica ou em um conjunto delas através do método df.query"""
     output = None 
@@ -109,10 +122,12 @@ def filtrar_dataset(df: DataFrame, query:str) -> DataFrame:
         logger.error(e)
     return output
 
+
 def substituir_valores(df: DataFrame, filtro_linhas:list, filtro_colunas:list, valor) -> DataFrame:
     """Função que subsitui os valores a partir dos filtros de linha ou coluna informados para o valor determinado."""
     df.loc[filtro_linhas, filtro_colunas] = valor
     return df
+
 
 def selecao_colunas(df: DataFrame, colunas: list) -> DataFrame:
     """Função que seleciona as colunas para montagem do dataset"""
@@ -134,6 +149,7 @@ def agrupar_dados(df: DataFrame, cols_agrup: list, cols_filter: list=None, agr=N
 
     return df
 
+
 def distancia_dados_geolocalizacao(p1_lat, p1_lgt, p2_lat, p2_lgt) -> float:
     
     ponto1 = (p1_lat, p1_lgt)
@@ -141,6 +157,7 @@ def distancia_dados_geolocalizacao(p1_lat, p1_lgt, p2_lat, p2_lgt) -> float:
     distancia = great_circle(ponto1, ponto2).km
     
     return distancia
+
 
 def power_transform(df: pd.DataFrame,cat_col: str=None,metodo: str = 'yeo-johnson', cols: Optional[list] = None) -> DataFrame:
     """
@@ -163,6 +180,7 @@ def power_transform(df: pd.DataFrame,cat_col: str=None,metodo: str = 'yeo-johnso
     if cols is None:
         cols = df.select_dtypes(include='number').columns.tolist()
 
+
     def _transform(group: pd.DataFrame) -> DataFrame:
         try:
 
@@ -171,7 +189,7 @@ def power_transform(df: pd.DataFrame,cat_col: str=None,metodo: str = 'yeo-johnso
             if not cols_existentes or len(group) == 0:
                 return group
 
-            transformer = PowerTransformer(method=metodo, standardize=True)
+            transformer = PowerTransformer(method=metodo, standardize=False)
 
             group[cols_existentes] = transformer.fit_transform(group[cols_existentes])
             return group
@@ -199,6 +217,7 @@ def target_encoding(feature:Series, dados_ajuste:DataFrame, target:Series):
     encoder.fit(dados_ajuste, target)
     dados_encoded = encoder.transform(dados_ajuste)
     return dados_encoded
+
 
 def one_hot_encoding(dados_ajuste:DataFrame, target:Series):
     """Função que realiza o encoding de feature categóricas transformando os valores categoricos em colunas booleanas.

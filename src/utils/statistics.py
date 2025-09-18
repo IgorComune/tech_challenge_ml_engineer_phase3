@@ -11,10 +11,13 @@ from scipy.stats import chisquare, shapiro, kstest, norm, ttest_ind
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.formula.api import ols
 from statsmodels.stats.anova import anova_lm
+import statsmodels.stats.multicomp as mc
 import re
+
 
 # instância do objeto logger
 logger = logging.getLogger(__name__)
+
 
 def verificacao_outlier(array, extreme = False):
 
@@ -27,6 +30,7 @@ def verificacao_outlier(array, extreme = False):
     lower_outlier = q1-factor*iqr
 
     return (array < lower_outlier) | (array > upper_outlier)
+
 
 def teste_normalidade(df:DataFrame, feature:str, num_cols:list, alpha=0.05, interativo:bool=False) -> DataFrame:
     """
@@ -119,6 +123,7 @@ def teste_qui_quadrado(df:DataFrame, feature:str, num_cols:list, bins=10, alpha=
             results+=processar(dados,categoria)
         return DataFrame(results)
 
+
 def analise_vif(df: DataFrame, feature: str, interativo: bool = False):
     """
     Realiza o teste VIF para as features numéricas.
@@ -164,7 +169,8 @@ def analise_vif(df: DataFrame, feature: str, interativo: bool = False):
         if df_features.shape[1] < 2:
             return DataFrame(columns=['Feature', 'VIF'])
         return vif_calculator(df_features)
-    
+
+
 def teste_t_duas_amostras(df, coluna_flag, coluna_valor, alpha=0.05):
     """
     Realiza um teste t de Student para comparar a média de uma variável
@@ -201,6 +207,7 @@ def teste_t_duas_amostras(df, coluna_flag, coluna_valor, alpha=0.05):
 
     except Exception as e:
         logger.error(f"Ocorreu um erro inesperado: {e}", exc_info=True)
+
 
 def teste_anova(df, formula, alpha=0.05):
     """
@@ -242,3 +249,30 @@ def teste_anova(df, formula, alpha=0.05):
 
     except Exception as e:
         logger.error(f"Ocorreu um erro durante a análise de ANOVA: {e}", exc_info=True)
+
+
+def teste_tukey(df: DataFrame, target: str, coluna_grupo: str) -> None:
+    """
+    Realiza e imprime o Teste de Tukey HSD para a comparação de múltiplas médias.
+
+    params:
+        dataframe (DataFrame): O DataFrame que contém os dados.
+        coluna_alvo (str): O nome da coluna numérica que será comparada (ex: 'tempo_total_pedido').
+        coluna_grupo (str): O nome da coluna categórica que define os grupos.
+
+    return:
+        None: A função imprime a tabela de resultados do teste no console.
+    """
+    if target not in df.columns or coluna_grupo not in df.columns:
+        print("Erro: Uma ou ambas as colunas não foram encontradas no df.")
+        return
+    
+    try:
+        comp = mc.MultiComparison(df[target], df[coluna_grupo])
+        tabela_tukey = comp.tukeyhsd()
+        
+        # Imprime a tabela de resultados
+        print(tabela_tukey)
+
+    except Exception as e:
+        print(f"Ocorreu um erro ao rodar o Teste de Tukey: {e}")

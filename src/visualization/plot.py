@@ -15,8 +15,10 @@ import plotly.express as px
 from typing import Dict, Any
 sns.set_style("darkgrid")
 
+
 # instância do objeto logger
 logger = logging.getLogger(__name__)
+
 
 def matriz_valores_nulos(df:DataFrame)-> plt.plot:
     """Função que gera uma matriz esparsa com a visualização dos valores nulos intercalado com valores preenchidos por coluna"""
@@ -27,6 +29,7 @@ def matriz_valores_nulos(df:DataFrame)-> plt.plot:
     
     except Exception as e:
         logger.error(f"Erro: {e}")
+
 
 def grafico_qq_plot(df: pd.DataFrame, interativo: bool = False, col_cat: str = None):
     """
@@ -65,6 +68,7 @@ def grafico_qq_plot(df: pd.DataFrame, interativo: bool = False, col_cat: str = N
 
     except Exception as e:
         logger.error(f"Erro: {e}")
+
 
 def grafico_boxplot(df: pd.DataFrame, interativo:bool=None, cat_col: str=None) -> plt.plot:
     """
@@ -155,6 +159,7 @@ def boxplot_comparativo_escalonamento_dados(df: pd.DataFrame, scale:str='Standar
     except Exception as e:
         return logger.error(e)
 
+
 def boxplot_comparativo_escalonamento_entre_dfs(df1: DataFrame, cols_df1: list, df2: DataFrame, cols_df2: list, title1: str, title2: str, scale: str = 'StandardScaler') -> plt.plot:
     """
     Escalona e compara dois DataFrames usando box plots.
@@ -206,7 +211,6 @@ def boxplot_comparativo_escalonamento_entre_dfs(df1: DataFrame, cols_df1: list, 
         logger.error(e)
 
 
-
 def grafico_dispersao(df: DataFrame, y:Series, x:Series, titulo:str, xlabel:str, ylabel:str, interativo:bool=None, feature:str = None, res:bool=None, 
                       hue:Series=None, size:Series=None) -> plt.plot:
     """
@@ -242,7 +246,8 @@ def grafico_dispersao(df: DataFrame, y:Series, x:Series, titulo:str, xlabel:str,
 
     except Exception as e:
         return logger.error(e)
-    
+
+
 def grafico_pairplot_target(df:DataFrame, target:str, lista_features:list[str]) -> plt.plot:
        """Função que retorna um gráfico pairplot das variáveis numéricas correlacionadas com o target indicado.
        
@@ -254,6 +259,7 @@ def grafico_pairplot_target(df:DataFrame, target:str, lista_features:list[str]) 
        ax = sns.pairplot(data=df, y_vars=target, x_vars=lista_features)
        ax.figure.suptitle('Gráfico de dispersão das variáveis', y=1.05)
        return plt.show()
+
 
 def grafico_histograma(df: pd.DataFrame, interativo: bool = False, feature: str = None):
     """
@@ -284,6 +290,7 @@ def grafico_histograma(df: pd.DataFrame, interativo: bool = False, feature: str 
     else:
         plot(df)
 
+
 def grafico_heatmap(df: pd.DataFrame, interativo: bool = False, col_cat: str = None):
     """
     Cria heatmap de correlação dos dados numéricos.
@@ -309,6 +316,7 @@ def grafico_heatmap(df: pd.DataFrame, interativo: bool = False, col_cat: str = N
     except Exception as e:
         logger.error(f"Erro: {e}")
 
+
 def grafico_pairplot_target(df:DataFrame, target:str, lista_features:list[str], tipo:str='reg') -> plt.plot:
        """Função que retorna um gráfico pairplot das variáveis numéricas correlacionadas com o target indicado.
        :params df: Dataframe
@@ -326,6 +334,7 @@ def grafico_pairplot_target(df:DataFrame, target:str, lista_features:list[str], 
             return plt.show()
        except Exception as e:
            logger.error(e)
+
 
 def grafico_coluna(df, x_col, y_col, hue_col=None, title=None):
     """
@@ -361,6 +370,7 @@ def grafico_coluna(df, x_col, y_col, hue_col=None, title=None):
     plt.xticks(rotation=45, ha='right') # Rotaciona os rótulos do eixo X para melhor visualização
     plt.tight_layout() # Ajusta o layout para evitar sobreposições
     plt.show()
+
 
 def gerar_mapa_scatter_plot(
     df: pd.DataFrame,
@@ -415,19 +425,21 @@ def gerar_mapa_scatter_plot(
         
         fig.show()
 
-def grafico_replot(df:DataFrame, x:str, y:str, col_div:str, linha_div:str,  hue:str, tipo:str='scatter', figsize:tuple=(12,8), titulo:str=None) ->plt.plot:
-    # Define o tamanho do gráfico
-    plt.figure(figsize=figsize)
 
-    sns.relplot(
-        data=df,
-        x=x,
-        y=y,
-        col=col_div,  
-        row=linha_div,
-        hue=hue,
-        kind=tipo
-    )
+def grafico_replot(df:DataFrame, x:str, y:str, col_div:str, linha_div:str,  hue:str, tipo:str='scatter', figsize:tuple=(12,8), titulo:str=None) -> None:
 
-    plt.suptitle(titulo, y=1.02)
-    return plt.show()
+    g = sns.relplot(
+            data=df,
+            x=x,
+            y=y,
+            col=col_div,
+            row=linha_div,
+            hue=hue,
+            kind=tipo
+        )
+        
+    if titulo:
+        g.fig.suptitle(titulo,fontsize=16,fontweight='bold')
+        g.fig.subplots_adjust(top=0.9)
+
+    plt.show()
