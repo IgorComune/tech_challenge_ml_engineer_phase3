@@ -189,7 +189,7 @@ def power_transform(df: pd.DataFrame,cat_col: str=None,metodo: str = 'yeo-johnso
             if not cols_existentes or len(group) == 0:
                 return group
 
-            transformer = PowerTransformer(method=metodo, standardize=False)
+            transformer = PowerTransformer(method=metodo, standardize=True)
 
             group[cols_existentes] = transformer.fit_transform(group[cols_existentes])
             return group

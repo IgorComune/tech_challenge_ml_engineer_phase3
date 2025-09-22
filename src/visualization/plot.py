@@ -228,8 +228,6 @@ def grafico_dispersao(df: DataFrame, y:Series, x:Series, titulo:str, xlabel:str,
             sns.scatterplot(data=plot_df, x=x, y=y, hue=hue, size=size, legend="full")
             if res:
                 plt.axhline(y=0, color='red', linestyle='--', linewidth=2)
-                plt.xlim(-5,5)
-                plt.ylim(-10,10)
             plt.xlabel(xlabel)
             plt.ylabel(ylabel)
             plt.title(titulo)
@@ -248,42 +246,61 @@ def grafico_dispersao(df: DataFrame, y:Series, x:Series, titulo:str, xlabel:str,
         return logger.error(e)
 
 
-def grafico_pairplot_target(df:DataFrame, target:str, lista_features:list[str]) -> plt.plot:
-       """Função que retorna um gráfico pairplot das variáveis numéricas correlacionadas com o target indicado.
-       
-       :params df: Dataframe
-       :params target: feature alvo da previsão.
-       :params lista_features: lista de features para avaliar a correlação dos dados com o target.
-
-       """
-       ax = sns.pairplot(data=df, y_vars=target, x_vars=lista_features)
-       ax.figure.suptitle('Gráfico de dispersão das variáveis', y=1.05)
-       return plt.show()
-
-
-def grafico_histograma(df: pd.DataFrame, interativo: bool = False, feature: str = None):
+def grafico_histograma(df: pd.DataFrame, interativo: bool = False, feature: str = None) -> Any:
     """
     Exibe histogramas das colunas numéricas.
     Se interativo=True, filtra por uma coluna categórica.
     """
-    def plot(dataframe, titulo_extra=''):
+
+    def plot(dataframe: pd.DataFrame, titulo_extra: str = ''):
         dados_numericos = dataframe.select_dtypes(include='number')
         num_colunas = len(dados_numericos.columns)
+
+        if num_colunas == 0:
+            print("Não há colunas numéricas para plotar.")
+            return
+
         cols = 3
         rows = int(np.ceil(num_colunas / cols))
-        fig, axs = plt.subplots(rows, cols, figsize=(5*cols, 4*rows))
-        axs = axs.flatten()
-        for i, col in enumerate(dados_numericos.columns):
-            sns.histplot(dados_numericos[col], color='steelblue', alpha=0.7, ax=axs[i])
-            axs[i].set_title(col)
-        for j in range(i+1, len(axs)):
-            fig.delaxes(axs[j])
-        fig.suptitle(f"Distribuição de Features Numéricas {titulo_extra}", fontsize=16)
-        plt.tight_layout(rect=[0,0.03,1,0.95])
-        plt.show()
+
+        # Caso só haja 1 coluna numérica: cria um único subplot
+        if num_colunas == 1:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            col = dados_numericos.columns[0]
+            sns.histplot(data=dados_numericos, x=col, color='steelblue', alpha=0.7, ax=ax)
+            ax.set_title(col)
+            fig.suptitle(
+                f"Distribuição de Features Numéricas {titulo_extra}",
+                fontsize=16,
+                x=0.5
+            )
+            plt.tight_layout(rect=[0, 0.03, 1, 0.90])
+            plt.show()
+
+        else:
+            # Caso várias colunas: grid de subplots
+            fig, axs = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+            axs = axs.flatten()
+
+            for i, col in enumerate(dados_numericos.columns):
+                ax = axs[i]
+                sns.histplot(data=dados_numericos, x=col, color='steelblue', alpha=0.7, ax=ax)
+                ax.set_title(col)
+
+            for j in range(num_colunas, len(axs)):
+                axs[j].set_visible(False)
+
+            fig.suptitle(
+                f"Distribuição de Features Numéricas {titulo_extra}",
+                fontsize=16,
+                x=0.5
+            )
+            plt.tight_layout(rect=[0, 0.03, 1, 0.90])
+            plt.show()
 
     if interativo and feature and feature in df.columns:
         opcoes = sorted(df[feature].dropna().unique())
+
         @interact(filtro=opcoes)
         def _plot(filtro):
             plot(df[df[feature] == filtro], f"- {feature}: {filtro}")

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def salvar_dataset(df:pd.DataFrame, path:str, sep:str=';') -> pd.DataFrame:
     """Função para salvar o dataset na pasta destino no formato csv."""
     logger.info(f'Dados salvos no path:{path}')
-    return df.to_csv(path, sep=sep)
+    return df.to_csv(path, sep=sep, index=False)
 
 
 def carregar_dataset(path:str, sep:str=';') -> pd.DataFrame:
