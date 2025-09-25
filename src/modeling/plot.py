@@ -49,17 +49,20 @@ def grafico_curva_aprendizagem(estimator: Any,X: DataFrame, y: Series, train_siz
     except Exception as e:
         return logger.error(e)
     
-def plot_shap(model, X_df: DataFrame, n_features: int = 20):
+def plot_shap(model, X_df: DataFrame, n_features: int = 20, kind:str='tree') -> None:
     """
     Gera um gráfico de barras com a importância global das features.
     
-    Args:
+    params:
         model: O modelo LightGBM treinado.
         X_df (pd.DataFrame): O DataFrame de features (ex: X_test).
         n_features (int): O número de features a serem plotadas.
     """
-    # Cria o objeto TreeExplainer
-    explainer = shap.TreeExplainer(model)
+    if kind =='tree':
+        # Cria o objeto TreeExplainer
+        explainer = shap.TreeExplainer(model)
+    else: 
+        explainer = shap.Explainer(model)
     
     # Calcula os valores SHAP
     shap_values = explainer.shap_values(X_df)
@@ -69,3 +72,5 @@ def plot_shap(model, X_df: DataFrame, n_features: int = 20):
     
     plt.title("Importância Global das Features (Média Absoluta dos SHAP Values)", fontsize=16)
     plt.show()
+
+ 
