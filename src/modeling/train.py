@@ -10,35 +10,11 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_score
 from sklearn.experimental import enable_halving_search_cv
 from sklearn.model_selection import train_test_split, GridSearchCV, HalvingRandomSearchCV,KFold
-
+from src.features.transformers import IQRDetectorClip
 
 # instância do objeto logger
 logger = logging.getLogger(__name__)
 
-class IQRDetectorClip(BaseEstimator, TransformerMixin):
-    def __init__(self, threshold=1.5):
-        self.threshold = threshold
-        self.lower_bound = None
-        self.upper_bound = None
-
-    def fit(self, X, y=None):
-        X = X.astype(float)
-        q1 = np.percentile(X, 25, axis=0)
-        q3 = np.percentile(X, 75, axis=0)
-        
-        iqr = q3 - q1
-
-        self.lower_bound = q1 - self.threshold * iqr
-        self.upper_bound = q3 + self.threshold * iqr
-        return self
-
-    def transform(self, X):
-        X = X.astype(float)
-        X_outliers_clipped = np.clip(X, a_min=self.lower_bound, a_max=self.upper_bound)
-        return X_outliers_clipped
-    
-    def get_feature_names_out(self, input_features=None):
-        return input_features
     
 
 def separar_dados_treino_teste(X: DataFrame,y: Series, teste_size: float=0.2,random_state: int = 42) -> tuple[DataFrame, DataFrame, Series, Series]:

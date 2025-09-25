@@ -1,147 +1,133 @@
-"""Funções de tratamento dos dados"""
+"""Funções utilitárias de manipulação dos dados"""
 import logging
-from pandas import DataFrame, Series
-import holidays
+from pandas import DataFrame
 import pandas as pd
-import numpy as np
 import sidetable as stb
 from ipywidgets import interact
 from IPython.display import display, HTML
 from sklearn.preprocessing import PowerTransformer
-from sklearn.preprocessing import OneHotEncoder
 from typing import Optional
 from geopy.distance import great_circle
-from category_encoders import TargetEncoder
+from typing import Any
 
 
 # instância do objeto logger
 logger = logging.getLogger(__name__)
 
 
-def amostra_dados(df: DataFrame) -> DataFrame:
-    """Função para retornar a amostragem dos dados"""
-    return df.sample(3)
-
-
-def contagem_valores(coluna:Series) -> None: 
-    """Função que realiza a contagem de valores por coluna"""
-    return coluna.value_counts()
-
-
-def dados_temporais(df: DataFrame, data:Series) -> DataFrame:
-    """Função que insere colunas com dados temporais a partir do index do Dataframe"""
-    df['dayofweek'] = data.dt.day_of_week
-    df['month'] = data.dt.month
-
-    # criação do objeto com os feriados brasileiros
-    india_holidays = holidays.India()
-    df['holiday'] = df.index.to_series().apply(lambda x: x in india_holidays)
-    df['weekend'] = df['dayofweek'].isin([5, 6]).astype(int)
-
-    return df
-
-
-def transformacao_ciclica(df: DataFrame, dias_uteis:bool=False) -> DataFrame:
-    """Transformação cíclica"""
-    
-    try:
-        if not dias_uteis:
-            logger.info(f'Transformação cíclica para as colunas de dados temporais.')
-            df['day_sin'] = np.sin(2 * np.pi * df['dayofweek'] / 7)
-            df['day_cos'] = np.cos(2 * np.pi * df['dayofweek'] / 7)
-            df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
-            df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
-
-
-        else:
-            logger.info(f'Transformação cíclica com dias úteis para as colunas de dados temporais.')
-            df['day_sin'] = np.sin(2 * np.pi * df['dayofweek'] / 5)
-            df['day_cos'] = np.cos(2 * np.pi * df['dayofweek'] / 5)
-            df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
-            df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
-
-    except Exception as e:
-        logger.error(e)
-    return df
-
-
-def verificacao_nulos(df:DataFrame) -> Series:
-    """Função que realiza a contagem de valores nulos por feature do dataset"""
-    output = df.isna().sum()
-    return output
-
-
-def filtrar_linhas_valores_nulos(df:DataFrame) -> DataFrame:
-    """Função que aplica o filtro de valores nulos no dataframe e retorna um dataframe filtrado com a correspondência."""
-    output = df[df.isna().any(axis=1)]
-    logger.info(f"Contagem de linhas nulas para o dataframe:{output.shape[0]}")
-    return output
-
-
-def frequencia_valores_nulos(df:DataFrame) -> DataFrame:
-    """Função que gera uma matriz esparsa com a visualização dos valores nulos intercalado com valores preenchidos por coluna"""
-    return df.stb.missing()
-
-
-def verificar_linhas_duplicadas(df:DataFrame) -> DataFrame:
-    """Função que retorna um dataframe contendo as linhas duplicadas do dataset inputado."""
-    output = \
-    (df.groupby(df.columns.tolist(), dropna=False)
-    .size()
-    .to_frame('n_duplicates')
-    .query('n_duplicates>1')
-    .sort_values('n_duplicates', ascending=False)
-    .head(5)
-    )
-    return output
-
-
-def remover_duplicados(df: DataFrame, coluna: str) -> DataFrame:
-    """Função para remoção de valores duplicados."""
-    df.drop_duplicates(subset=[coluna], keep='first', inplace=True)
-    return df
-
-
 def filtragem_interativa_valores_categoricos(df: DataFrame, coluna: str) -> DataFrame:
-    """Função que aplica um filtro iterativo para selecionar os dados do dataset a partir dos valores da coluna selecionada."""
-    
+
+    """
+    Função que aplica um filtro iterativo para selecionar os dados do dataset a partir dos valores da coluna selecionada.
+
+    params:
+
+        df (DataFrame): DataFrame de entrada.
+        coluna (str): coluna com categorias para filtragem interativa.
+
+    returns:
+
+        DataFrame: DataFrame com filtragem interativa.
+
+    """
+
     lista = sorted(df[coluna].unique())
-    @interact(valor = lista)
+
+    @interact(valor=lista)
     def gerar_dataframe(valor):
         filtro = df.query(f"{coluna}=='{valor}'")
-
         return filtro
 
 
-def filtrar_dataset(df: DataFrame, query:str) -> DataFrame:
-    """Função que aplica um filtro em uma variável categorica ou em um conjunto delas através do método df.query"""
-    output = None 
+def filtrar_dataset(df: DataFrame, query: str) -> DataFrame:
+    """
+    Função que aplica um filtro em uma variável categorica ou em um conjunto delas através do método df.query
+
+    params:
+
+        df (DataFrame): DataFrame de entrada.
+        query (str): query de filtragem dos dados do dataset.
+
+    returns:
+
+        DataFrame: DataFrame filtrado pela condição.
+
+    """
+    output = None
     try:
         output = df.query(query)
+        return output
+
     except Exception as e:
         logger.error(e)
-    return output
+        raise
 
 
-def substituir_valores(df: DataFrame, filtro_linhas:list, filtro_colunas:list, valor) -> DataFrame:
-    """Função que subsitui os valores a partir dos filtros de linha ou coluna informados para o valor determinado."""
+def substituir_valores(
+    df: DataFrame, filtro_linhas: list, filtro_colunas: list, valor: Any
+) -> DataFrame:
+    """
+    Função que substitui os valores a partir dos filtros de linha ou coluna informados para o valor determinado.
+
+    params:
+
+        df (DataFrame): DataFrame de entrada.
+        filtro_linhas (list): lista de valores de index para filtragem.
+        filtro_colunas (list): lista de valores de index para filtragem.
+        valor
+
+    returns:
+
+        DataFrame: DataFrame filtrado pela condição.
+
+    """
     df.loc[filtro_linhas, filtro_colunas] = valor
     return df
 
 
 def selecao_colunas(df: DataFrame, colunas: list) -> DataFrame:
-    """Função que seleciona as colunas para montagem do dataset"""
+    """
+    Função que seleciona as colunas para montagem do dataset.
+
+    params:
+
+        df (DataFrame): DataFrame de entrada.
+        colunas (list): lista de colunas para filtrar o dataset.
+
+    returns:
+
+        DataFrame: DataFrame filtrado com as colunas selecionadas.
+
+    """
     return df[colunas]
 
 
-def agrupar_dados(df: DataFrame, cols_agrup: list, cols_filter: list=None, agr=None) -> DataFrame:
-    """Função que agrupa as colunas para montagem do dataset."""
+def agrupar_dados(
+    df: DataFrame, cols_agrup: list, cols_filter: list = None, agr=None
+) -> DataFrame:
+    """
+    Função que agrupa as colunas e resume os valores por algum critério de agregação definido.
+
+    params:
+
+        df (DataFrame): DataFrame de entrada.
+        cols_agrup (list): lista de colunas para agrupar o dataset.
+        cols_filter (list): lista de colunas para filtrar o dataset.
+        arg (list): função ou critério de agregação. Ex: np.sum(), 'sum', 'count'.
+
+    returns:
+
+        DataFrame: DataFrame filtrado com as colunas selecionadas.
+
+    """
     try:
         if not cols_filter:
-            logger.info(f'Agrupamento selecionado: {cols_agrup}, método: {agr}')
+            logger.info(f"Agrupamento selecionado: {cols_agrup}, método: {agr}")
             df = df.groupby(by=cols_agrup).agg(agr)
         else:
-            logger.info(f'Agrupamento selecionado: {cols_agrup}, filtragem dataset:{cols_filter}, método: {agr}')
+            logger.info(
+                f"Agrupamento selecionado: {cols_agrup}, filtragem dataset:{cols_filter}, método: {agr}"
+            )
             df = df.groupby(by=cols_agrup)[cols_filter].agg(agr)
 
     except Exception as e:
@@ -208,23 +194,3 @@ def power_transform(df: pd.DataFrame,cat_col: str=None,metodo: str = 'yeo-johnso
         logger.error(e)
 
 
-def target_encoding(feature:Series, dados_ajuste:DataFrame, target:Series):
-    """Função que realiza o encoding de feature categórica com alta dimensaionalidade 
-    de categorias a partir da representação dessa feature no target.
-    
-    """
-    encoder = TargetEncoder(cols=[feature])
-    encoder.fit(dados_ajuste, target)
-    dados_encoded = encoder.transform(dados_ajuste)
-    return dados_encoded
-
-
-def one_hot_encoding(dados_ajuste:DataFrame, target:Series):
-    """Função que realiza o encoding de feature categóricas transformando os valores categoricos em colunas booleanas.
-    
-    """
-    encoder = OneHotEncoder()
-    encoder.fit(dados_ajuste, target)
-    dados_encoded = encoder.transform(dados_ajuste)
-    df_tratado = pd.DataFrame(dados_encoded.toarray(), columns=encoder.get_feature_names_out())
-    return df_tratado
