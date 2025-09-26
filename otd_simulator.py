@@ -5,7 +5,15 @@ import pandas as pd
 import simpy
 from datetime import datetime
 import joblib
+import warnings
+from src.config.logging_config import setup_logging
 
+# ajuste dos warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# configuração do logging
+logger = setup_logging()
 # entidades
 
 #PEDIDOS:
@@ -74,7 +82,7 @@ except FileNotFoundError:
     print("Erro: Arquivo 'modelo_teste.pkl' não encontrado. Verifique o caminho.")
     exit()
 
-# Suas variáveis e distribuições de simulação
+# Variáveis e distribuições de simulação
 media_pedidos_por_dia = 902
 desvio_padrao_pedidos = 113
 
@@ -103,7 +111,7 @@ std_geral_grocery = 10.26
 dist_tempo_coleta = [5, 10, 15]
 prob_tempo_coleta = [1347/(1347+1332+1331), 1332/(1347+1332+1331), 1331/(1347+1332+1331)]
 
-# NOVO: Dicionário para velocidades médias baseado em área, tráfego e veículo
+# Dicionário para velocidades médias baseado em área, tráfego e veículo
 dados_velocidade_por_condicao = {
     'Metropolitian': {
         'High': {'motorcycle': 1.815406, 'scooter': 2.012594, 'van': 2.020903},
@@ -207,6 +215,8 @@ def pedido(env, entregadores, dados, previsao):
         # O yield já estava correto, usa o tempo de viagem corrigido
         yield env.timeout(max(0, tempo_corrigido))
         
+        
+        is_otd_corrigido = 1 if (tempo_corrigido) <= 120 else 0 
         resultados_simulacao.append({
             'id_pedido': dados['id_pedido'], 'previsao_min': previsao,
             'tempo_real_min': tempo_real_total, 'tempo_corrigido_min': tempo_corrigido,
@@ -218,22 +228,37 @@ def pedido(env, entregadores, dados, previsao):
             'jam_or_high_traffic': dados['jam_or_high_traffic'],
             'is_sunny_weather': dados['is_sunny_weather'],
             'tempo_criacao_sim': dados['tempo_criacao'],
-            'tempo_conclusao_sim': env.now, 'decisao': decisao
+            'tempo_conclusao_sim': env.now, 'decisao': decisao,
+            'is_otd_corrigido': is_otd_corrigido
         })
 
+# ... (Seu código de SETUP INICIAL e FUNÇÕES DO SIMULADOR permanece o mesmo) ...
+
 # =================================================================================
-# 3. GERADOR DE PEDIDOS
+# 3. GERADOR DE PEDIDOS (Revisado para Logging Diário)
 # =================================================================================
 
 def gerador_de_pedidos(env, entregadores, modelo):
     """
     Gera pedidos com base nos parâmetros definidos, simulando a chegada ao longo do tempo.
+    Avança a simulação em ciclos de 24 horas (1440 minutos) e loga o OTD diário.
     """
-    num_dias_simulacao = 7
+    num_dias_simulacao = 8
     total_pedidos_simulacao = 0
     
-    for dia in range(num_dias_simulacao):
-        # Gera o número de pedidos para este dia, com base na média e desvio padrão
+    ponto_de_corte_tempo = 24 * 60 # 1440 minutos (1 dia)
+    
+    # Índice do último pedido registrado para cálculo do OTD do dia (usado para fatiar a lista)
+    indice_ultimo_pedido_calculado = 0 
+
+    for dia in range(1, num_dias_simulacao+1):
+        
+        # ----------------------------------------------------
+        # 1. INÍCIO DO DIA: Logging de Status
+        # ----------------------------------------------------
+        print(f"\n--- INICIANDO SIMULAÇÃO DO DIA {dia} (Tempo Simulado: {env.now:.0f} min) ---")
+        
+        # Gera o número de pedidos para este dia
         pedidos_hoje = int(np.round(np.random.normal(media_pedidos_por_dia, desvio_padrao_pedidos)))
         if pedidos_hoje < 0: pedidos_hoje = 0
         total_pedidos_simulacao += pedidos_hoje
@@ -242,16 +267,15 @@ def gerador_de_pedidos(env, entregadores, modelo):
         media_inter_chegada = (24 * 60) / pedidos_hoje if pedidos_hoje > 0 else 0
         
         for i in range(pedidos_hoje):
-            # 1. Simula o tempo até a chegada do próximo pedido
+            # geração dos atributos do pedido e Processamento
             yield env.timeout(np.random.exponential(media_inter_chegada))
             
-            # 2. Geração dos atributos do pedido de forma aleatória
+            # --- Início da Geração de Atributos do Pedido ---
             delivery_distance = np.random.normal(
                 media_curta if np.random.random() < proporcao_curta_distancia else media_longa,
                 desvio_curta if np.random.random() < proporcao_curta_distancia else desvio_longa
             )
             if delivery_distance < 0: delivery_distance = 0
-            
             is_grocery = 1 if np.random.choice(['Grocery', 'Outros'], p=dist_is_grocery) == 'Grocery' else 0
             Traffic = np.random.choice(['Low', 'Medium', 'High', 'Jam'], p=dist_trafego)
             Weather = np.random.choice(['Stormy', 'Sunny', 'Foggy', 'Windy', 'Sandstorms'], p=dist_clima)
@@ -272,11 +296,46 @@ def gerador_de_pedidos(env, entregadores, modelo):
                 'tempo_coleta': np.random.choice(dist_tempo_coleta, p=prob_tempo_coleta),
                 'tempo_criacao': env.now
             }
+            # --- Fim da Geração de Atributos do Pedido ---
             
             previsao = previsao_do_modelo(modelo, dados_pedido)
             env.process(pedido(env, entregadores, dados_pedido, previsao))
-    
-    print(f"Total de pedidos gerados na simulação: {total_pedidos_simulacao}")
+        
+        # Calcula o tempo que falta para a próxima marca de 1440 minutos
+        tempo_avancado_no_dia = env.now % ponto_de_corte_tempo
+        tempo_para_avancar = ponto_de_corte_tempo - tempo_avancado_no_dia
+
+        # Se o tempo for muito próximo de zero (já está no ponto de corte ou passou), avança mais 1440 min
+        if abs(tempo_para_avancar) < 1e-9:
+             tempo_para_avancar = ponto_de_corte_tempo
+             
+        yield env.timeout(tempo_para_avancar)
+        
+        # ----------------------------------------------------
+        # 4. FIM DO DIA: Logging e Cálculo de OTD
+        # ----------------------------------------------------
+        
+        # Pega APENAS os novos pedidos que foram CONCLUÍDOS neste ciclo diário
+        if len(resultados_simulacao) > indice_ultimo_pedido_calculado:
+            
+            df_pedidos_concluidos_no_dia = pd.DataFrame(
+                resultados_simulacao[indice_ultimo_pedido_calculado:]
+            )
+            
+            # Calcula a média OTD (da nova coluna 'is_otd' que adicionamos antes)
+            otd_diario_corrigido = df_pedidos_concluidos_no_dia['is_otd_corrigido'].mean()
+            
+            print(f"--- FIM DO DIA {dia} ---")
+            print(f"  > OTD do Dia (Tempo Corrigido <= 120 min): {otd_diario_corrigido:.2%}")
+            print(f"  > Total de Pedidos Concluídos no Dia: {len(df_pedidos_concluidos_no_dia)}")
+            
+            # Atualiza o índice para o próximo dia
+            indice_ultimo_pedido_calculado = len(resultados_simulacao)
+        else:
+             print(f"--- FIM DO DIA {dia} --- Nenhum pedido concluído neste ciclo. Tempo atual: {env.now:.0f} min.")
+
+
+    print(f"\nTotal de pedidos gerados na simulação: {total_pedidos_simulacao}")
     yield env.timeout(0)
 
 # =================================================================================
@@ -284,7 +343,7 @@ def gerador_de_pedidos(env, entregadores, modelo):
 # =================================================================================
 
 if __name__ == "__main__":
-    print("Iniciando a simulação completa...")
+    print("Iniciando a simulação.")
     
     # Configura o ambiente
     env = simpy.Environment()
@@ -293,8 +352,8 @@ if __name__ == "__main__":
     # Inicia o processo de geração de pedidos
     env.process(gerador_de_pedidos(env, entregadores, modelo_regressao))
 
-    # Executa a simulação por 7 dias (7 * 24 * 60 minutos)
-    env.run(until=7 * 24 * 60)
+    # simulacao em minutos .
+    env.run(until=9 * 24 * 60)
     
     # Análise dos resultados
     df_resultados_finais = pd.DataFrame(resultados_simulacao)

@@ -7,6 +7,7 @@ from sklearn.model_selection import KFold, learning_curve
 import matplotlib.pyplot as plt
 import shap
 import graphviz
+from sklearn.tree import export_graphviz
 
 # inicializa o javascript para renderizar a imagem
 shap.initjs()
@@ -73,4 +74,32 @@ def plot_shap(model, X_df: DataFrame, n_features: int = 20, kind:str='tree') -> 
     plt.title("Importância Global das Features (Média Absoluta dos SHAP Values)", fontsize=16)
     plt.show()
 
- 
+
+def gerar_arvore(modelo: Any, feature_list: list, model_type: str = 'DecisionTree') -> graphviz.Source:
+    """
+    Função que gera um gráfico de árvore de decisão para modelos Decision Tree ou Random Forest.
+    
+    params:
+        modelo: O modelo árvore.
+        feature_list: Lista de nomes das features (colunas de entrada).
+        model_type: Tipo de modelo para plotagem ('DecisionTree' ou 'RandomForest').
+        
+    return:
+        graphviz.Source: O objeto gráfico da árvore para visualização.
+    """
+    
+    if model_type.lower() == 'randomforest':
+        arvore_para_plotar = modelo.estimators_[0]
+        logger.info("Plotando a primeira árvore (índice 0) do modelo Random Forest.")
+    elif model_type.lower() == 'DecisionTree':
+
+        arvore_para_plotar = modelo
+    else:
+        arvore_para_plotar = modelo
+   
+    data = export_graphviz(arvore_para_plotar, out_file=None, filled=True, 
+                    rounded=True, class_names=['não', 'sim'], feature_names=feature_list)
+    
+    graph = graphviz.Source(data)
+    return graph
+

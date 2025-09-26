@@ -1,3 +1,4 @@
+"""Arquivo de configuração de logging"""
 import sys
 import logging
 import logging.config
@@ -35,11 +36,12 @@ def setup_logging(log_level=logging.INFO):
         logging.config.dictConfig(logging_config)
 
     except Exception as e:
-        # Fallback para caso haja algum problema inesperado na configuração do dictConfig
-        # Isso garante que você ainda terá logs básicos no CloudWatch
         print(f"Erro ao configurar o logging com dictConfig: {e}", file=sys.stderr)
         logging.basicConfig(level=log_level, format='%(asctime)s | %(levelname)s | %(name)s | %(message)s')
         logging.warning("Configuração de logging via dictConfig falhou. Usando basicConfig como fallback.", exc_info=True)
 
     # aplicação global das configurações
     logging.config.dictConfig(logging_config)
+
+
+    logging.getLogger() 

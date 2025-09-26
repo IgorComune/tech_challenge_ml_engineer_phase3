@@ -7,9 +7,7 @@ import numpy as np
 from pandas import DataFrame, Series
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import PowerTransformer, OneHotEncoder
-from category_encoders import TargetEncoder
 import holidays
-import datetime
 
 # instância do objeto logger
 logger = logging.getLogger(__name__)
@@ -122,17 +120,6 @@ def power_transform(df: DataFrame,cat_col: str=None,metodo: str = 'yeo-johnson',
         
     except Exception as e:
         logger.error(e)
-
-
-def target_encoding(feature:Series, dados_ajuste:DataFrame, target:Series):
-    """Função que realiza o encoding de feature categórica com alta dimensaionalidade 
-    de categorias a partir da representação dessa feature no target.
-    
-    """
-    encoder = TargetEncoder(cols=[feature])
-    encoder.fit(dados_ajuste, target)
-    dados_encoded = encoder.transform(dados_ajuste)
-    return dados_encoded
 
 
 def one_hot_encoding(dados_ajuste:DataFrame, target:Series):
