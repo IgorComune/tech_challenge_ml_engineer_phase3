@@ -123,6 +123,6 @@ def gerar_metricas(y_true, y_pred):
     rmse = root_mean_squared_error(y_true, y_pred)
     r2 = r2_score(y_true, y_pred)
     # Adicione outras métricas que você precisar
-    print(f"MAE: {mae:.4f}")
-    print(f"RMSE: {rmse:.4f}")
-    print(f"R2 Score: {r2:.4f}")
+    logger.info(f"MAE: {mae:.4f}")
+    logger.info(f"RMSE: {rmse:.4f}")
+    logger.info(f"R2 Score: {r2:.4f}")
