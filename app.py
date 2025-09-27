@@ -8,6 +8,8 @@ import time
 import subprocess
 import os
 from typing import Optional, Dict, Any
+import sys
+import socket
 
 # Page configuration
 st.set_page_config(
@@ -329,46 +331,76 @@ def check_server_status(url: str, timeout: int = 5) -> bool:
         return False
 
 
-def start_mlflow_server() -> bool:
-    """
-    Start MLflow server using the mlflow_server.py script.
-    
-    Returns:
-        True if server start command was executed successfully, False otherwise.
-    """
+def wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            with socket.create_connection((host, port), timeout=2):
+                return True
+        except OSError:
+            time.sleep(1)
+    return False
+
+def start_server(script_name: str, host: str, port: int) -> bool:
     try:
-        # Change to src directory and run the script
-        subprocess.Popen(
-            ["python", "mlflow_server.py"],
+        process = subprocess.Popen(
+            [sys.executable, script_name],
             cwd="src",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
-        return True
+        # st.info(f"Iniciando {script_name} (PID={process.pid})...")
+        
+        if wait_for_port(host, port):
+            # st.success(f"{script_name} está pronto em {host}:{port}")
+            return True
+        # else:
+        #     st.error(f"{script_name} não respondeu em {host}:{port} dentro do timeout")
+        #     return False
     except Exception as e:
-        st.error(f"Error starting MLflow server: {str(e)}")
+        st.error(f"Erro ao iniciar {script_name}: {e}")
         return False
 
-
-def start_api_server() -> bool:
-    """
-    Start API server using the api_server.py script.
+# def start_mlflow_server() -> bool:
+#     """
+#     Start MLflow server using the mlflow_server.py script.
     
-    Returns:
-        True if server start command was executed successfully, False otherwise.
-    """
-    try:
-        # Change to src directory and run the script
-        subprocess.Popen(
-            ["python", "api_server.py"],
-            cwd="src",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        return True
-    except Exception as e:
-        st.error(f"Error starting API server: {str(e)}")
-        return False
+#     Returns:
+#         True if server start command was executed successfully, False otherwise.
+#     """
+#     try:
+#         # Change to src directory and run the script
+#         subprocess.Popen(
+#             ["python", "mlflow_server.py"],
+#             cwd="src",
+#             stdout=subprocess.PIPE,
+#             stderr=subprocess.PIPE
+#         )
+#         return True
+#     except Exception as e:
+#         st.error(f"Error starting MLflow server: {str(e)}")
+#         return False
+
+
+# def start_api_server() -> bool:
+#     """
+#     Start API server using the api_server.py script.
+    
+#     Returns:
+#         True if server start command was executed successfully, False otherwise.
+#     """
+#     try:
+#         # Change to src directory and run the script
+#         subprocess.Popen(
+#             ["python", "api_server.py"],
+#             cwd="src",
+#             stdout=subprocess.PIPE,
+#             stderr=subprocess.PIPE
+#         )
+#         return True
+#     except Exception as e:
+#         st.error(f"Error starting API server: {str(e)}")
+#         return False
 
 
 def load_data() -> Optional[pd.DataFrame]:
@@ -397,7 +429,10 @@ def main():
     # Title and subtitle
     st.markdown('<h1 class="main-title">🚚 Order Prediction</h1>', unsafe_allow_html=True)
     st.markdown('<p class="subtitle">Get instant delivery time predictions for your orders</p>', unsafe_allow_html=True)
-    
+    start_server("mlflow_server.py", host="127.0.0.1", port=5000)
+    start_server("api_server.py", host="127.0.0.1", port=8000)
+
+
     # Initialize session state
     if 'random_data' not in st.session_state:
         st.session_state.random_data = None
