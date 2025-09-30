@@ -16,6 +16,7 @@ def dados_temporais(df: DataFrame, data:str) -> DataFrame:
     """Função que insere colunas com dados temporais a partir do index do Dataframe"""
     df['dayofweek'] = df[data].dt.dayofweek
     df['month'] = df[data].dt.month
+    df['weekend'] = (df['dayofweek'] >= 5).astype(int)
 
     # criação do objeto com os feriados brasileiros
     br_holidays = holidays.BR()

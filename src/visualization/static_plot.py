@@ -1,7 +1,7 @@
 """Arquivo de funções geradoras de gráficos estáticos"""
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 from ipywidgets import interact
 import matplotlib.pyplot as plt
@@ -15,6 +15,7 @@ import seaborn as sns
 import sidetable as stb
 from sklearn.preprocessing import RobustScaler, StandardScaler
 import statsmodels.stats.multicomp as mc
+import math
 
 sns.set_style("darkgrid")
 
@@ -377,3 +378,128 @@ def grafico_catplot(
         plt.savefig(path)
 
     plt.show()
+
+
+def grafico_dispersao(
+    df: DataFrame,
+    y: Series,
+    x: Series,
+    titulo: str,
+    xlabel: str,
+    ylabel: str,
+    res: bool = None,
+    regr: bool = None,
+    hue: str = None,
+    size: str = None,
+    path: str = None,
+    ax = None,
+) -> None:
+    """
+    Gera um gráfico de dispersão para comparar.
+
+    params:
+
+        df (DataFrame): Dataframe de entrada.
+        y (Series): coluna de valores do eixo y.
+        x (Series): coluna de valores do eixo x.
+        title (str): O título do gráfico.
+        xlabel (str): O título do do eixo x.
+        ylabel (str): O título do eixo y.
+        res (bool)=True: adiciona linha horizontal y=0.
+        regr (bool) = True: adiciona a linha de regressão do
+        hue (str): coluna para gerar categorização da dispersão dos dados.
+        size (str): coluna para definir o tamanho da dispersão dos dados.
+        path (str): caminho para salvamento da imagem.
+
+    return:
+        None: Exibe o gráfico.
+
+    """
+    
+    was_called_alone = ax is None
+
+    try:
+        if was_called_alone:
+            fig, ax = plt.subplots(figsize=(10, 5))
+
+        if not regr:
+            sns.scatterplot(data=df, x=x, y=y, hue=hue, size=size, legend="full", ax=ax)
+        else:
+            sns.regplot(data=df, x=x, y=y, line_kws={'color':'red'}, ax=ax)
+
+        if res and not regr:
+            ax.axhline(y=0, color="red", linestyle="--", linewidth=2)
+
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(titulo)
+
+        if was_called_alone:
+            fig.tight_layout()
+
+            if path:
+                fig.savefig(path)
+
+            plt.show()
+            plt.close(fig)
+
+    except Exception as e:
+        logger.error(f"Erro ao gerar o gráfico de dispersão: {e}")
+        return
+    
+
+def grafico_histograma(
+    df: pd.DataFrame, 
+    feature: Union[str, list[str]], 
+    path: str = None, 
+    titulo: str = None, 
+    ax=None
+) -> None:
+    """
+    Exibe histogramas de uma ou mais colunas numéricas em grid de 2 colunas.
+
+    Params:
+        df (DataFrame): DataFrame de entrada.
+        feature (str | list[str]): Nome da coluna ou lista de colunas a serem plotadas.
+        path (str): Caminho para salvar a imagem (opcional).
+        titulo (str): Título geral (usado apenas quando múltiplos plots).
+        ax (matplotlib axis): Eixo para plotar. Se None, cria novo.
+    """
+    try:
+        if isinstance(feature, str):
+            feature = [feature]
+
+        n_features = len(feature)
+        n_cols = 2
+        n_rows = math.ceil(n_features / n_cols)
+        
+        if ax is None:
+            fig, axes = plt.subplots(
+                n_rows, n_cols, figsize=(12, 5 * n_rows)
+            )
+            axes = axes.flatten()
+        else:
+            axes = [ax]
+
+        for i, col in enumerate(feature):
+            sns.histplot(df[col], color="steelblue", alpha=0.7, ax=axes[i], kde=True)
+            axes[i].set_title(f"{col}", fontsize=12)
+
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
+
+        if titulo and ax is None:
+            fig.suptitle(titulo, fontsize=16, y=1.02)
+
+        plt.tight_layout()
+
+        if path:
+            plt.savefig(path, bbox_inches="tight")
+
+        if ax is None:
+            plt.show()
+
+    except Exception as e:
+        print(f"Erro ao gerar o gráfico: {e}")
+        return
+

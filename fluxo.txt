@@ -1,0 +1,18 @@
+## etapas
+
+# Validação de Modelo
+
+# construir o servidor do mlflow - ok
+# guardar as métricas de performance dos modelos - ok 
+# corrigir os gráficos -- falta arvore ok
+# salvar imagens localmemnte e experimemntos ok
+# testes finais de modelo ---- ok
+# documentacao model validation -- em execucao
+# ajuste textual no eda ok
+# documentacao do simulation -- em execucao
+# ajustar conteudo do otd_simulator -- em execucao
+# atualizar campos do streamlit
+# atualizar funçoes
+# testar o run_predict e run_train
+# criar o makefile para run_predict e run_train
+# desenhar a arquitetura do projeto
