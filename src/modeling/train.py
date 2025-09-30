@@ -5,12 +5,14 @@ from pandas import DataFrame, Series
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, KBinsDiscretizer
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, root_mean_squared_error, mean_absolute_error, r2_score
 from sklearn.experimental import enable_halving_search_cv
 from sklearn.model_selection import train_test_split, GridSearchCV, HalvingRandomSearchCV,KFold
 from src.features.transformers import IQRDetectorClip
+from typing import Dict, Any
+import time
 
 # instância do objeto logger
 logger = logging.getLogger(__name__)
@@ -42,7 +44,8 @@ def separar_dados_treino_teste(X: DataFrame,y: Series, teste_size: float=0.2,ran
         logger.error(f"Erro ao gerar a divisão dos dados : {e}")
         raise
 
-def criar_pipeline(colunas_categoricas: list[str],colunas_numericas: list[str],modelo=None,usar_onehot: bool = True) -> Pipeline:
+def criar_pipeline(colunas_categoricas: list[str],colunas_numericas: list[str],
+                   colunas_discretizacao: list[str],modelo=None,usar_onehot: bool = True,) -> Pipeline:
     """
     Cria um pipeline de pré-processamento + modelo.
     
@@ -56,6 +59,7 @@ def criar_pipeline(colunas_categoricas: list[str],colunas_numericas: list[str],m
     logger.info("Iniciando construção do pipeline de pré-processamento.")
 
     try:
+       
         if usar_onehot:
             cat_pipeline = Pipeline([
                 ('imputer', SimpleImputer(strategy='most_frequent')),
@@ -66,16 +70,30 @@ def criar_pipeline(colunas_categoricas: list[str],colunas_numericas: list[str],m
                 ('imputer', SimpleImputer(strategy='most_frequent'))
             ])
 
-        # pipeline numérico
-        numeric_pipeline = Pipeline([
+        discretizer_pipeline = Pipeline([
             ('imputer', SimpleImputer(strategy='mean')),
-            ('iqr', IQRDetectorClip()),
+            ('iqr', IQRDetectorClip()), 
+         
+            ('discretizer', KBinsDiscretizer(
+                n_bins=10, 
+                encode='ordinal', 
+                strategy='quantile', 
+                random_state=42
+            ))
         ])
 
+        numeric_passthrough = Pipeline([
+            ('imputer', SimpleImputer(strategy='mean')),
+            ('iqr', IQRDetectorClip()),
+    
+        ])
+
+ 
         preprocessor = ColumnTransformer(
             transformers=[
                 ('cat_features', cat_pipeline, colunas_categoricas),
-                ('num_features', numeric_pipeline, colunas_numericas)
+                ('discretized_features', discretizer_pipeline, colunas_discretizacao), 
+                ('num_passthrough', numeric_passthrough, colunas_numericas)            
             ],
             remainder='passthrough',
             verbose_feature_names_out=False
@@ -90,8 +108,8 @@ def criar_pipeline(colunas_categoricas: list[str],colunas_numericas: list[str],m
         return pipeline
 
     except Exception as e:
-        logger.error(f"Erro ao criar pipeline de pré-processamento: {e}")
-        raise
+        logger.error(f"Erro ao construir o pipeline: {e}")
+        raise e
 
 def gerar_grid_search_cv(pipeline=Pipeline, param_grid=dict, cv=KFold(n_splits=5), scoring:str='r2', n_jobs:int=None, verbose:int=0) -> GridSearchCV:
 
@@ -120,9 +138,53 @@ def gerar_metricas(y_true, y_pred):
     Gera e imprime métricas de avaliação para modelos de regressão.
     """
     mae = mean_absolute_error(y_true, y_pred)
+    mse = mean_squared_error(y_true, y_pred)
     rmse = root_mean_squared_error(y_true, y_pred)
     r2 = r2_score(y_true, y_pred)
-    # Adicione outras métricas que você precisar
+
     logger.info(f"MAE: {mae:.4f}")
+    logger.info(f"MSE: {mse:.4f}")
     logger.info(f"RMSE: {rmse:.4f}")
     logger.info(f"R2 Score: {r2:.4f}")
+
+    return mae, mse, rmse, r2
+
+def coletar_metricas( model_name: str, metricas_treino=dict, metricas_teste=dict,
+                     tmp_execucao_treino=time, tmp_execucao_predicao=time ,params=Any) -> Dict[str, Any]:
+    """
+    Coleta métricas de performance, tempo de execução e hiperparâmetros de um modelo.
+
+    params:
+        model (Any): O modelo treinado (ex: grid_search.best_estimator_).
+        model_name (str): Nome do modelo para identificação.
+        metricas_treino (dict): Dicionário com as métricas de treino.
+        metricas_teste (dict): Dicionário com as métricas de teste.
+        tmp_execucao_treino (time): tempo de execucao de treino.
+        tmp_execucao_predicao (time): tempo de execucao de treino.
+        params: (Any): Parâmetros do modelo
+
+    return:
+        Dict[str, Any]: Um dicionário com todas as métricas e parâmetros coletados.
+    """
+
+    registro = {
+        'Modelo': model_name,
+        'R2_Teste': metricas_teste['R2_Score'],
+        'MAE_Teste': metricas_teste['MAE'],
+        'MSE_Teste': metricas_teste['MSE'],
+        'RMSE_Teste': metricas_teste['RMSE'],
+        
+        'R2_Treino': metricas_treino['R2_Score'],
+        'MAE_Treino': metricas_treino['MAE'],
+        'MSE_Treino': metricas_treino['MSE'],
+        'RMSE_Treino': metricas_treino['RMSE'],
+        
+        'Tempo_Treino_Segundos': tmp_execucao_treino,
+        'Tempo_Predicao_Segundos': tmp_execucao_predicao,
+        
+        # PARÂMETROS
+        'Hiperparametros': params
+        }
+    
+
+    return registro

@@ -74,51 +74,6 @@ def grafico_qq_plot(
         logger.error(f"Erro: {e}")
 
 
-def grafico_histograma(
-    df: pd.DataFrame, interativo: bool = False, feature: str = None, path: str = None
-) -> None:
-    """
-    Exibe histogramas das colunas numéricas.
-    Se interativo=True, filtra por uma coluna categórica.
-
-    params:
-        df (DataFrame): DataFrame de entrada.
-        feature (str): Nome da coluna categórica para agrupar (modo interativo).
-        interativo (bool): Se True, a análise é por categoria com um widget. Se False, a análise é geral.
-        path (str): caminho para salvamento da imagem.
-
-    return:
-        None: plot com uma matriz espersa de valores nulos.
-
-    """
-
-    def plot(dataframe, titulo_extra=""):
-        dados_numericos = dataframe.select_dtypes(include="number")
-        num_colunas = len(dados_numericos.columns)
-        cols = 3
-        rows = int(np.ceil(num_colunas / cols))
-        fig, axs = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
-        axs = axs.flatten()
-        for i, col in enumerate(dados_numericos.columns):
-            sns.histplot(dados_numericos[col], color="steelblue", alpha=0.7, ax=axs[i])
-            axs[i].set_title(col)
-        for j in range(i + 1, len(axs)):
-            fig.delaxes(axs[j])
-        fig.suptitle(f"Distribuição de Features Numéricas {titulo_extra}", fontsize=16)
-        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-        if path:
-            plt.savefig(path)
-        plt.show()
-
-    if interativo and feature and feature in df.columns:
-        opcoes = sorted(df[feature].dropna().unique())
-
-        @interact(filtro=opcoes)
-        def _plot(filtro):
-            plot(df[df[feature] == filtro], f"- {feature}: {filtro}")
-
-    else:
-        plot(df)
 
 
 def grafico_heatmap(
@@ -161,74 +116,6 @@ def grafico_heatmap(
 
     except Exception as e:
         logger.error(f"Erro: {e}")
-
-
-def grafico_dispersao(
-    df: DataFrame,
-    y: Series,
-    x: Series,
-    titulo: str,
-    xlabel: str,
-    ylabel: str,
-    interativo: bool = None,
-    feature: str = None,
-    res: bool = None,
-    hue: Series = None,
-    size: Series = None,
-    path: str = None,
-) -> None:
-    """
-    Gera um gráfico de dispersão para comparar.
-
-    params:
-
-        df (DataFrame): Dataframe de entrada.
-        y (Series): coluna de valores do eixo y.
-        x (Series): coluna de valores do eixo x.
-        title (str): O título do gráfico.
-        xlabel (str): O título do do eixo x.
-        ylabel (str): O título do eixo y.
-        interativo (bool)=True: adiciona um seletor interativo para filtrar pela coluna `feature`.
-        res (bool)=True: adiciona linha horizontal y=0.
-        feature (str): colunas para selecionar a plotagem por valores categóricos.
-        hue (Series): coluna para gerar categorização da dispersão dos dados.
-        size (Series): coluna para definir o tamanho da dispersão dos dados.
-        path (str): caminho para salvamento da imagem.
-
-    return:
-        None: Exibe o gráfico.
-
-    """
-    try:
-
-        def plot(valor_feature=None):
-            plot_df = df.copy()
-            if feature is not None and valor_feature is not None:
-                plot_df = plot_df[plot_df[feature] == valor_feature]
-
-            plt.figure(figsize=(10, 5))
-            sns.scatterplot(data=plot_df, x=x, y=y, hue=hue, size=size, legend="full")
-            if res:
-                plt.axhline(y=0, color="red", linestyle="--", linewidth=2)
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(titulo)
-            plt.tight_layout()
-
-            if path:
-                plt.savefig(path)
-            plt.show()
-
-        if interativo and feature is not None:
-            if feature not in df.columns:
-                raise logger.warning(f"Coluna '{feature}' não existe no DataFrame.")
-            valores = df[feature].dropna().unique()
-            interact(plot, valor_feature=valores)
-        else:
-            plot()
-
-    except Exception as e:
-        return logger.error(e)
 
 
 def gerar_mapa_scatter_plot(
