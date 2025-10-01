@@ -2,8 +2,8 @@
 
 import logging
 
-from pandas import DataFrame, Series
 import sidetable as stb
+from pandas import DataFrame, Series
 
 # Configuração do logger para este módulo
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ def amostra_dados(df: DataFrame) -> DataFrame:
         df (DataFrame): DataFrame de entrada.
 
     returns:
-        DataFrame (DataFrame): DataFrame com a amostra de dados.
+        DataFrame: DataFrame com a amostra de dados.
 
     """
     return df.sample(3)

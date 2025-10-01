@@ -3,49 +3,73 @@
 import logging
 from typing import Optional
 
+import holidays
 import numpy as np
 from pandas import DataFrame, Series
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.preprocessing import PowerTransformer, OneHotEncoder
-import holidays
+from sklearn.preprocessing import OneHotEncoder, PowerTransformer
 
 # instância do objeto logger
 logger = logging.getLogger(__name__)
 
-def dados_temporais(df: DataFrame, data:str) -> DataFrame:
-    """Função que insere colunas com dados temporais a partir do index do Dataframe"""
-    df['dayofweek'] = df[data].dt.dayofweek
-    df['month'] = df[data].dt.month
-    df['weekend'] = (df['dayofweek'] >= 5).astype(int)
+
+def dados_temporais(df: DataFrame, data: str) -> DataFrame:
+    """
+    Função que insere colunas com dados temporais a partir do index do Dataframe.
+
+    df (DataFrame): DataFrame de entrada.
+    data (str): Coluna de data.
+
+    return:
+        DataFrame: DataFrame com as colunas dayofweek, months, weekend e feriado.
+
+    """
+    df["dayofweek"] = df[data].dt.dayofweek
+    df["month"] = df[data].dt.month
+    df["weekend"] = (df["dayofweek"] >= 5).astype(int)
 
     # criação do objeto com os feriados brasileiros
     br_holidays = holidays.BR()
-    df['Feriado'] = df[data].apply(lambda x: x in br_holidays)
+    df["Feriado"] = df[data].apply(lambda x: x in br_holidays)
 
     return df
 
-def transformacao_ciclica(df: DataFrame, dias_uteis:bool=False) -> DataFrame:
-    """Transformação cíclica"""
-    
+
+def transformacao_ciclica(df: DataFrame, dias_uteis: bool = False) -> DataFrame:
+    """
+    Função que realiza a transformação cíclica das colunas de tempo para correção de escala do efeito de fim dos períodos,
+    adicionando uma escala cíclica orientada pelas funções de seno e cosseno.
+
+    params:
+
+        df (DataFrame): DataFrame de entrada.
+        dias_uteis (bool): Define se a transformação será orientada por dias úteis ou da semana.
+
+    return:
+        DataFrame: DataFrame com as colunas day_sin, day_cos, month_sin, month_cos.
+    """
+
     try:
         if not dias_uteis:
-            logger.info(f'Transformação cíclica para as colunas de dados temporais.')
-            df['day_sin'] = np.sin(2 * np.pi * df['dayofweek'] / 7)
-            df['day_cos'] = np.cos(2 * np.pi * df['dayofweek'] / 7)
-            df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
-            df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
-
+            logger.info(f"Transformação cíclica para as colunas de dados temporais.")
+            df["day_sin"] = np.sin(2 * np.pi * df["dayofweek"] / 7)
+            df["day_cos"] = np.cos(2 * np.pi * df["dayofweek"] / 7)
+            df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
+            df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
 
         else:
-            logger.info(f'Transformação cíclica com dias úteis para as colunas de dados temporais.')
-            df['day_sin'] = np.sin(2 * np.pi * df['dayofweek'] / 5)
-            df['day_cos'] = np.cos(2 * np.pi * df['dayofweek'] / 5)
-            df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
-            df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
+            logger.info(
+                f"Transformação cíclica com dias úteis para as colunas de dados temporais."
+            )
+            df["day_sin"] = np.sin(2 * np.pi * df["dayofweek"] / 5)
+            df["day_cos"] = np.cos(2 * np.pi * df["dayofweek"] / 5)
+            df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
+            df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
 
     except Exception as e:
         logger.error(e)
     return df
+
 
 class IQRDetectorClip(BaseEstimator, TransformerMixin):
     def __init__(self, threshold=1.5):
@@ -57,7 +81,7 @@ class IQRDetectorClip(BaseEstimator, TransformerMixin):
         X = X.astype(float)
         q1 = np.percentile(X, 25, axis=0)
         q3 = np.percentile(X, 75, axis=0)
-        
+
         iqr = q3 - q1
 
         self.lower_bound = q1 - self.threshold * iqr
@@ -68,13 +92,17 @@ class IQRDetectorClip(BaseEstimator, TransformerMixin):
         X = X.astype(float)
         X_outliers_clipped = np.clip(X, a_min=self.lower_bound, a_max=self.upper_bound)
         return X_outliers_clipped
-    
+
     def get_feature_names_out(self, input_features=None):
         return input_features
 
 
-
-def power_transform(df: DataFrame,cat_col: str=None,metodo: str = 'yeo-johnson', cols: Optional[list] = None) -> DataFrame:
+def power_transform(
+    df: DataFrame,
+    cat_col: str = None,
+    metodo: str = "yeo-johnson",
+    cols: Optional[list] = None,
+) -> DataFrame:
     """
     Aplica PowerTransformer (Box-Cox ou Yeo-Johnson) às colunas numéricas,
     agrupando os dados por uma coluna categórica.
@@ -83,18 +111,17 @@ def power_transform(df: DataFrame,cat_col: str=None,metodo: str = 'yeo-johnson',
         df (DataFrame): DataFrame de entrada com colunas numéricas e categóricas.
         cat_col (str): Nome da coluna categórica usada para agrupar.
         metodo (str, optional): Método do PowerTransformer ('yeo-johnson' ou 'box-cox').
-        cols (list, optional): Lista de colunas numéricas a transformar. 
+        cols (list, optional): Lista de colunas numéricas a transformar.
                                Se None, aplica em todas as numéricas.
 
     returns:
-        pd.DataFrame: DataFrame com as colunas numéricas transformadas por grupo.
+        DataFrame: DataFrame com as colunas numéricas transformadas por grupo.
     """
 
     df = df.copy()
-    
-    if cols is None:
-        cols = df.select_dtypes(include='number').columns.tolist()
 
+    if cols is None:
+        cols = df.select_dtypes(include="number").columns.tolist()
 
     def _transform(group: DataFrame) -> DataFrame:
         try:
@@ -118,17 +145,26 @@ def power_transform(df: DataFrame,cat_col: str=None,metodo: str = 'yeo-johnson',
         else:
 
             return _transform(df)
-        
+
     except Exception as e:
         logger.error(e)
 
 
-def one_hot_encoding(dados_ajuste:DataFrame, target:Series):
+def one_hot_encoding(dados_ajuste: DataFrame, target: Series) -> DataFrame:
     """Função que realiza o encoding de feature categóricas transformando os valores categoricos em colunas booleanas.
-    
+
+    params:
+        dados_ajuste (DataFrame): Colunas para transformação.
+        target (Series): Coluna target.
+
+    return:
+        DataFrame: DataFrame com as colunas categóricas transformadas.
+
     """
     encoder = OneHotEncoder()
     encoder.fit(dados_ajuste, target)
     dados_encoded = encoder.transform(dados_ajuste)
-    df_tratado = DataFrame(dados_encoded.toarray(), columns=encoder.get_feature_names_out())
+    df_tratado = DataFrame(
+        dados_encoded.toarray(), columns=encoder.get_feature_names_out()
+    )
     return df_tratado

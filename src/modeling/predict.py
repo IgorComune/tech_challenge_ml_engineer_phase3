@@ -1,5 +1,7 @@
 """Aqruivo de funções de predição do modelo"""
+
 from pandas import DataFrame
+
 
 def predict(data_input: DataFrame, model=None) -> list:
     """
