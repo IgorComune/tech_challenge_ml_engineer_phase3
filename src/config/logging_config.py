@@ -43,5 +43,5 @@ def setup_logging(log_level=logging.INFO):
     # aplicação global das configurações
     logging.config.dictConfig(logging_config)
 
-
-    logging.getLogger() 
+    logger = logging.getLogger() 
+    return logger
