@@ -17,8 +17,58 @@ warnings.filterwarnings("ignore", category=UserWarning)
 """
 Este script implementa uma simulação discreta (usando SimPy) para avaliar o impacto
 de uma política de decisão corretiva no tempo final de entrega (On-Time Delivery - OTD).
-...
+
+A simulação integra:
+1. Um modelo de Machine Learning (LightGBM, carregado via MLflow/DAGsHub) para Previsão de Tempo.
+2. Uma lógica de simulação do 'Mundo Real' baseada em fatores de tráfego, clima e distância.
+3. Uma Política Corretiva que ajusta o tempo de entrega com base na previsão de risco.
+
+--------------------------------------------------------------------------------
+
+1. ENTIDADES E VARIÁVEIS SIMULADAS
+
+O sistema simula pedidos, cada um com as seguintes características (atributos aleatórios):
+- Agent_Age, Agent_Rating: Desempenho do entregador.
+- Weather, Traffic, Area, Vehicle: Condições ambientais e logísticas.
+- delivery_distance: Distância real do percurso.
+- is_grocery, jam_or_high_traffic: Features binárias do pedido.
+- tempo_coleta: Tempo fixo de coleta no centro de distribuição.
+
+2. RECURSOS DO SISTEMA
+- Entregadores: Representado por um recurso SimPy (simulação de pool limitado).
+
+3. FLUXO DE TEMPO E PREVISÃO
+
+A função pedido() segue os seguintes passos de tempo:
+1. Tempo de Coleta: Tempo fixo, simulado pelo 'request' do recurso Entregador.
+2. Previsão de Tempo (Modelo ML):
+    - O modelo LightGBM prevê o log(tempo_entrega_base) com base nos atributos do pedido.
+    - O resultado é transformado de volta para minutos (np.exp()).
+3. Tempo Real de Entrega:
+    - Baseado em: (delivery_distance / velocidade_média) + Ruído.
+    - O tempo real é uma estimativa do que realmente acontece, usado para calcular o OTD final.
+
+4. POLÍTICA DE DECISÃO CORRETIVA
+
+A política tenta mitigar o risco de atraso (quando PREVISÃO > 60 min).
+- O algoritmo compara a previsão do ML com critérios de risco (Tráfego, Veículo, Área).
+- Se a condição for atendida, um valor fixo (15-20 minutos) é subtraído do tempo real (tempo_real_total).
+- O tempo corrigido (tempo_corrigido_min) é usado no yield final (tempo de entrega simulado).
+
+5. COLETA DE MÉTRICAS (RESULTADOS)
+
+O resultado final é armazenado na lista 'resultados_simulacao' e inclui:
+- previsao_min: O tempo estimado pelo modelo ML.
+- tempo_real_min: O tempo que a entrega levaria sem intervenção.
+- tempo_corrigido_min: O tempo final que a entrega levou (após a intervenção da política).
+- is_otd_corrigido: 1 se tempo_corrigido_min <= 120 minutos.
+- decisao: A ação corretiva tomada ('Rota_Reduzida', 'Aumento_Velocidade' ou 'Nenhuma').
+
+A meta é comparar a performance de OTD usando tempo_real_min (baseline) vs. tempo_corrigido_min (com política).
+
 """
+
+
 
 # Carrega variáveis do arquivo .env
 load_dotenv()
@@ -69,14 +119,12 @@ else:
         
 # --- VARIÁVEIS E CONSTANTES GLOBAIS DE SIMULAÇÃO ---
 
-# Variáveis de resultados e tempo (CORREÇÕES DE ESCOPO FEITAS AQUI)
+# Variáveis de resultados e tempo
 resultados_simulacao = [] 
 MINUTOS_POR_DIA = 24 * 60 # 1440 minutos
 
-# CONSTANTE DE RESÍDUO PADRÃO (± 10 minutos, onde 10 é o Desvio-Padrão)
-STD_RESIDUO_PADRAO = 10 # <--- NOVO: O erro (desvio-padrão) agora é fixo em 10 minutos.
-# CONSTANTE DE RESÍDUO PADRÃO (Aumenta a previsibilidade)
-# Fator de correção de viés multiplicativo (1.25 para compensar subestimação de 20%)
+# CONSTANTE DE RESÍDUO PADRÃO 
+STD_RESIDUO_PADRAO = 10 
 VIÉS_CORREÇÃO_ADITIVA = 0
 FATOR_DIFICULDADE = 1.05
 
@@ -104,14 +152,12 @@ desvio_padrao_rating = 0.2
 dist_tempo_coleta = [5, 10, 15]
 prob_tempo_coleta = [1347/(4010), 1332/(4010), 1331/(4010)]
 
-# Dicionário de dispersão (mantido, mas NÃO USADO, apenas para referência de código antigo)
-dados_std_residuo = {} # Esvaziado para garantir que não seja usado
 
 # =================================================================================
 # 2. FUNÇÕES DO SIMULADOR
 # =================================================================================
 
-# função de previsão (mantida)
+# função de previsão
 def previsao_do_modelo(modelo, dados_pedido):
     """
     Função para fazer a previsão usando seu modelo de ML.
@@ -130,7 +176,6 @@ def previsao_do_modelo(modelo, dados_pedido):
         'dist_gte_10': dist_gte_10,  
     }])
 
-    # Checagem de modelo nulo (se a carga falhou)
     if modelo is None:
         return 60.0
         
@@ -138,14 +183,14 @@ def previsao_do_modelo(modelo, dados_pedido):
     tempo_previsto = np.exp(log_tempo_previsto)
     return tempo_previsto[0]
 
-# função de pedido
+# função de pedido: entidade do sistema
 def pedido(env, entregadores, dados_entrada, previsao):
     """Processo de um único pedido, do recebimento à entrega."""
 
     global resultados_simulacao
     global MINUTOS_POR_DIA 
     global STD_RESIDUO_PADRAO
-    global VIÉS_CORREÇÃO_ADITIVA # <-- Novo Fator Global
+    global VIÉS_CORREÇÃO_ADITIVA
     global FATOR_DIFICULDADE
 
     dados = dados_entrada.copy() 
@@ -154,20 +199,17 @@ def pedido(env, entregadores, dados_entrada, previsao):
     with entregadores.request() as req:
         yield req
         
-        # Tempo de Coleta
+        # tempo de coleta
         yield env.timeout(dados['tempo_coleta'])
 
         # --- CÁLCULO DO TEMPO REAL DE ENTREGA ---
         
-           # 3. Cálculo do Tempo Real de Viagem: 
-        # Média = Previsão AJUSTADA | STD = 2.5
+        # calculo do tempo real de viagem
         tempo_real_viagem = np.random.normal(previsao*FATOR_DIFICULDADE, STD_RESIDUO_PADRAO) + VIÉS_CORREÇÃO_ADITIVA
-        
-        # Garante que o tempo de viagem é positivo
         tempo_real_viagem = max(0, tempo_real_viagem)
         
         
-        # --- POLÍTICA DE DECISÃO CORRETIVA (MANTIDA) ---
+        # --- POLÍTICA DE DECISÃO CORRETIVA ---
         tempo_corrigido_viagem = max(0, tempo_real_viagem)
         decisao = 'Nenhuma'
         
@@ -181,31 +223,31 @@ def pedido(env, entregadores, dados_entrada, previsao):
         clima_ruim = dados['Weather'] != 'Sunny'
         dist_gte_10_logica = 1 if dados['delivery_distance'] >= 10 else 0 
 
-        # Condição de Risco (previsão é o seu gatilho principal)
+        # trigger da política corretiva
         if previsao >= 40:
             
-            # 1. Risco Extremo (Combinação das Novas Features + Clima Ruim)
+            # 1. Risco Extremo (combinação de tráfego e distância)
             if dados['jam_or_high_traffic'] == 1 and dados['delivery_distance'] >= 15:
                 
-                tempo_corrigido_viagem = max(0, tempo_real_viagem - desconto_risco_extremo) # -30 min
+                tempo_corrigido_viagem = max(0, tempo_real_viagem - desconto_risco_extremo) 
                 decisao = 'Intervencao_Risco_Extremo'
             
-            # 2. Alto Risco (Tráfego Alto/Jam)
+            # 2. Alto Risco (Tráfego Alto/Jam e distância)
             elif dados['jam_or_high_traffic'] == 1 and dados['delivery_distance'] <15:
                 
                 if dados['Vehicle'] in ['Scooter', 'Moto']:
                     
                     if agente_mais_velho:
-                        tempo_corrigido_viagem = max(0, tempo_real_viagem - desconto_risco_extremo) # -25 min
+                        tempo_corrigido_viagem = max(0, tempo_real_viagem - desconto_risco_extremo)
                         decisao = 'Intervenção_Alto_Reforçado'
                     else:
                         tempo_corrigido_viagem = max(0, tempo_real_viagem - desconto_agressivo) 
                         decisao = 'Intervenção_Alto_Risco'
 
-            # 3. Médio Risco (Tráfego Médio - Usando o antigo 'Traffic == Medium' como fallback)
+            # 3. Médio Risco (demais condições de tráfego )
             elif dados['jam_or_high_traffic']==0: 
                 if dados['Vehicle'] in ['Scooter', 'Moto']:
-                    tempo_corrigido_viagem = max(0, tempo_real_viagem - desconto_base) # -15 min
+                    tempo_corrigido_viagem = max(0, tempo_real_viagem - desconto_base)
                     decisao = 'Intervenção_Médio_Risco'
 
         
@@ -262,7 +304,7 @@ def gerador_de_pedidos(env, pool_entregadores, modelo, prob_grocery_desejada):
     global prob_tempo_coleta
     global MINUTOS_POR_DIA 
 
-    # Variáveis de escopo
+    # dias de simulação
     num_dias_simulacao = 7
     
     indice_ultimo_pedido_calculado = 0 
@@ -271,7 +313,7 @@ def gerador_de_pedidos(env, pool_entregadores, modelo, prob_grocery_desejada):
         
         print(f"\n--- INICIANDO SIMULAÇÃO DO DIA {dia} (Tempo Simulado: {env.now:.0f} min) ---")
 
-        # CÁLCULO DE PEDIDOS HOJE
+        # pedidos diários
         pedidos_hoje = int(np.round(np.random.normal(media_pedidos_por_dia, desvio_padrao_pedidos)))
         if pedidos_hoje <= 0: pedidos_hoje = 1
         
@@ -279,19 +321,18 @@ def gerador_de_pedidos(env, pool_entregadores, modelo, prob_grocery_desejada):
         
         for i in range(pedidos_hoje):
             
-            # 1. CORREÇÃO DE TRAVAMENTO NO YIELD
+            # CORREÇÃO DE TRAVAMENTO NO YIELD
             if i == 0:
                 tempo_espera = 0
             else:
                 tempo_espera = np.random.exponential(media_inter_chegada)
             
-            # Checagem de sanidade
             if not isinstance(tempo_espera, (int, float)) or tempo_espera <= 0 or not np.isfinite(tempo_espera):
                 tempo_espera = 0.01 
                 
             yield env.timeout(tempo_espera)
             
-            # --- GERAÇÃO DE FEATURES ---
+            # --- GERAÇÃO DE FEATURES NO GERADOR DE PEDIDO ---
             delivery_distance = np.random.normal(
                 media_curta if np.random.random() < proporcao_curta_distancia else media_longa,
                 desvio_curta if np.random.random() < proporcao_curta_distancia else desvio_longa
@@ -327,13 +368,11 @@ def gerador_de_pedidos(env, pool_entregadores, modelo, prob_grocery_desejada):
             env.process(pedido(env, pool_entregadores, dados_pedido, previsao))
             
         
-        # Força o avanço do SimPy para o final do dia
         tempo_restante_no_ciclo = (dia * MINUTOS_POR_DIA) - env.now
         if tempo_restante_no_ciclo > 0:
             yield env.timeout(tempo_restante_no_ciclo)
         
-        
-        # Lógica de logging diário
+        # verificação do encerramento da simulação
         if len(resultados_simulacao) > indice_ultimo_pedido_calculado:
             
             df_pedidos_concluidos_no_dia = pd.DataFrame(
@@ -349,7 +388,6 @@ def gerador_de_pedidos(env, pool_entregadores, modelo, prob_grocery_desejada):
             if not pedidos_concluidos_no_ciclo.empty:
                 otd_diario_corrigido = pedidos_concluidos_no_ciclo['is_otd_corrigido'].mean()
                 
-                # Assume que logger está configurado
                 logger.info(f"--- FIM DO DIA {dia} ---")
                 logger.info(f"  > OTD do Dia (Tempo Corrigido <= 120 min): {otd_diario_corrigido:.2%}")
                 logger.info(f"  > Total de Pedidos Concluídos no Dia: {len(pedidos_concluidos_no_ciclo)}")
@@ -372,37 +410,31 @@ if __name__ == "__main__":
     # configuração do logging
     logger = setup_logging()
     
-    # Configura o ambiente
+    # configuração do ambiente
     env = simpy.Environment()
     entregadores = simpy.Resource(env, capacity=800)
     
-    PROB_GROCERY_DESEJADA = 0.2 # Ajustado para 6% para refletir os dados
+    PROB_GROCERY_DESEJADA = 0.2
     
-    # Inicia o processo de geração de pedidos
+    # início do processo de geração de pedidos
     env.process(gerador_de_pedidos(env, entregadores, modelo_regressao, PROB_GROCERY_DESEJADA))
 
     # simulacao em minutos .
-    MINUTOS_COBERTURA = 24 * 60 # 1 dia extra para conclusão
+    MINUTOS_COBERTURA = 24 * 60
     DIAS_SIMULACAO = 7
     env.run(until=(DIAS_SIMULACAO * MINUTOS_POR_DIA) + MINUTOS_COBERTURA)
 
     
-    # Análise dos resultados
+    # resultados da simulação
     df_resultados_finais = pd.DataFrame(resultados_simulacao)
     
     print("\n--- Resultados Finais da Simulação ---")
     logger.info(df_resultados_finais.head())
     
-    # Adicionando a contagem de is_grocery para verificar o resultado imediatamente
-    contagem_grocery = df_resultados_finais['is_grocery'].value_counts(normalize=True).mul(100).round(2)
-    print("\n--- Verificação da Proporção IS_GROCERY ---")
-    print(f"Total de Pedidos Gerados: {len(df_resultados_finais)}")
-    print(contagem_grocery)
 
     prop_sucesso = (df_resultados_finais['tempo_corrigido_min'] <= 120).mean()
     logger.info(f"\nProporção de pedidos com tempo de entrega corrigido <= 120 minutos: {prop_sucesso:.2%}")
 
-    # Salva os resultados em um arquivo
     nome_arquivo = f'data/simulation/sim_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.csv'
     df_resultados_finais.to_csv(nome_arquivo, index=False)
     logger.info(f"\nResultados salvos em: {nome_arquivo}")

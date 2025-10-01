@@ -1,22 +1,21 @@
 """Funções utilitárias de manipulação dos dados"""
+
 import logging
-from pandas import DataFrame
+from typing import Any, Optional
+
 import pandas as pd
 import sidetable as stb
-from ipywidgets import interact
-from IPython.display import display, HTML
-from sklearn.preprocessing import PowerTransformer
-from typing import Optional
 from geopy.distance import great_circle
-from typing import Any
-
+from IPython.display import HTML, display
+from ipywidgets import interact
+from pandas import DataFrame
+from sklearn.preprocessing import PowerTransformer
 
 # instância do objeto logger
 logger = logging.getLogger(__name__)
 
 
 def filtragem_interativa_valores_categoricos(df: DataFrame, coluna: str) -> DataFrame:
-
     """
     Função que aplica um filtro iterativo para selecionar os dados do dataset a partir dos valores da coluna selecionada.
 
@@ -137,60 +136,9 @@ def agrupar_dados(
 
 
 def distancia_dados_geolocalizacao(p1_lat, p1_lgt, p2_lat, p2_lgt) -> float:
-    
+
     ponto1 = (p1_lat, p1_lgt)
     ponto2 = (p2_lat, p2_lgt)
     distancia = great_circle(ponto1, ponto2).km
-    
+
     return distancia
-
-
-def power_transform(df: pd.DataFrame,cat_col: str=None,metodo: str = 'yeo-johnson', cols: Optional[list] = None) -> DataFrame:
-    """
-    Aplica PowerTransformer (Box-Cox ou Yeo-Johnson) às colunas numéricas,
-    agrupando os dados por uma coluna categórica.
-
-    params:
-        df (pd.DataFrame): DataFrame de entrada com colunas numéricas e categóricas.
-        cat_col (str): Nome da coluna categórica usada para agrupar.
-        metodo (str, optional): Método do PowerTransformer ('yeo-johnson' ou 'box-cox').
-        cols (list, optional): Lista de colunas numéricas a transformar. 
-                               Se None, aplica em todas as numéricas.
-
-    returns:
-        pd.DataFrame: DataFrame com as colunas numéricas transformadas por grupo.
-    """
-
-    df = df.copy()
-    
-    if cols is None:
-        cols = df.select_dtypes(include='number').columns.tolist()
-
-
-    def _transform(group: pd.DataFrame) -> DataFrame:
-        try:
-
-            cols_existentes = [col for col in cols if col in group.columns]
-
-            if not cols_existentes or len(group) == 0:
-                return group
-
-            transformer = PowerTransformer(method=metodo, standardize=True)
-
-            group[cols_existentes] = transformer.fit_transform(group[cols_existentes])
-            return group
-        except Exception as e:
-            logger.error(f"Erro ao transformar grupo: {e}")
-            return group
-
-    try:
-        if cat_col and cat_col in df.columns:
-            return df.groupby(cat_col, group_keys=False).apply(_transform)
-        else:
-
-            return _transform(df)
-        
-    except Exception as e:
-        logger.error(e)
-
-

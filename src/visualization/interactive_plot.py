@@ -3,14 +3,14 @@
 import logging
 from typing import Any, Dict
 
-from ipywidgets import interact
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pandas import DataFrame, Series
 import plotly.express as px
-from scipy import stats
 import seaborn as sns
+from ipywidgets import interact
+from pandas import DataFrame, Series
+from scipy import stats
 
 sns.set_style("darkgrid")
 
@@ -33,7 +33,7 @@ def grafico_qq_plot(
         path (str): caminho para salvamento da imagem.
 
     return:
-        None: plot com uma matriz espersa de valores nulos.
+        None: gráfico qq-plot.
 
     """
     try:
@@ -42,7 +42,9 @@ def grafico_qq_plot(
         def plot(dataframe):
             nrows = 3
             ncols = int(np.ceil(len(numeric_cols) / nrows))
-            _, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(5 * ncols, 5 * nrows))
+            _, axs = plt.subplots(
+                nrows=nrows, ncols=ncols, figsize=(5 * ncols, 5 * nrows)
+            )
             axs = axs.ravel()
 
             for i, col in enumerate(numeric_cols):
@@ -74,8 +76,6 @@ def grafico_qq_plot(
         logger.error(f"Erro: {e}")
 
 
-
-
 def grafico_heatmap(
     df: pd.DataFrame, interativo: bool = False, feature: str = None, path: str = None
 ) -> None:
@@ -90,7 +90,7 @@ def grafico_heatmap(
         path (str): caminho para salvamento da imagem.
 
     return:
-        None: plot com uma matriz espersa de valores nulos.
+        None: gráfico heatmap.
     """
     try:
 
@@ -150,7 +150,7 @@ def gerar_mapa_scatter_plot(
         path (str): caminho para salvamento da imagem no.
 
     return:
-        None: plot com gráfico de dispersão em mapa.
+        None: gráfico de dispersão em mapa.
 
 
     """

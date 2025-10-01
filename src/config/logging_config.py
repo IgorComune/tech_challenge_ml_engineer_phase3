@@ -1,33 +1,34 @@
 """Arquivo de configuração de logging"""
-import sys
+
 import logging
 import logging.config
+import sys
 from pathlib import Path
+
 
 # função para setup de logging
 def setup_logging(log_level=logging.INFO):
     logging_config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'standard': {
-                'format': '%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "standard": {
+                "format": "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
             },
         },
-        'handlers': {
-            'console': { # Este é o handler principal para CloudWatch Logs
-                'level': log_level,
-                'class': 'logging.StreamHandler',
-                'formatter': 'standard',
-                'stream': sys.stdout, # Direciona logs para a saída padrão (stdout)
-                                      # Lambda captura stdout/stderr e envia para CloudWatch
+        "handlers": {
+            "console": {  # Este é o handler principal para CloudWatch Logs
+                "level": log_level,
+                "class": "logging.StreamHandler",
+                "formatter": "standard",
+                "stream": sys.stdout,  # Direciona logs para a saída padrão (stdout)
+                # Lambda captura stdout/stderr e envia para CloudWatch
             },
-     
         },
-        'root': {
+        "root": {
             # Apenas o handler 'console' deve ser usado para o root logger
-            'handlers': ['console'],
-            'level': log_level,
+            "handlers": ["console"],
+            "level": log_level,
         },
     }
 
@@ -37,11 +38,17 @@ def setup_logging(log_level=logging.INFO):
 
     except Exception as e:
         print(f"Erro ao configurar o logging com dictConfig: {e}", file=sys.stderr)
-        logging.basicConfig(level=log_level, format='%(asctime)s | %(levelname)s | %(name)s | %(message)s')
-        logging.warning("Configuração de logging via dictConfig falhou. Usando basicConfig como fallback.", exc_info=True)
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        )
+        logging.warning(
+            "Configuração de logging via dictConfig falhou. Usando basicConfig como fallback.",
+            exc_info=True,
+        )
 
     # aplicação global das configurações
     logging.config.dictConfig(logging_config)
 
-    logger = logging.getLogger() 
+    logger = logging.getLogger()
     return logger

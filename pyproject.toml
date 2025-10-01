@@ -55,3 +55,11 @@ dotenv = "^0.9.9"
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.flake8]
+# Define o novo limite de linha para 120 caracteres. 
+# Isso resolve o erro E501 (line too long).
+max-line-length = 120
+
+# Opcional: Lista de códigos de erro a serem ignorados
+# ignore = ["E203", "W503"]
