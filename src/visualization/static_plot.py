@@ -251,7 +251,7 @@ def grafico_pairplot_target(
     return plt.show()
 
 
-def grafico_coluna(df, x_col, y_col, hue_col=None, title=None, path: str = None) -> None:
+def grafico_coluna(df, x_col, y_col, hue_col=None, title=None, path: str = None, palette:str=None, ) -> None:
     """
     Cria um gráfico de colunas com a opção de um hue categórico.
 
@@ -277,7 +277,8 @@ def grafico_coluna(df, x_col, y_col, hue_col=None, title=None, path: str = None)
         y=y_col,
         hue=hue_col,
         errorbar=None,  # Remove a barra de erro para simplificar o exemplo
-        palette="pastel",
+        palette=palette,
+     
     )
 
     # Adiciona o título, se fornecido
@@ -502,4 +503,118 @@ def grafico_histograma(
     except Exception as e:
         print(f"Erro ao gerar o gráfico: {e}")
         return
+    
+
+def grafico_lineplot(
+    df: pd.DataFrame, 
+    x_col: str, 
+    y_col: str, 
+    hue_col: str, # Nova coluna para diferenciar as linhas (ex: 'Cenário')
+    path: str = None, 
+    titulo: str = None, 
+    ax=None
+) -> None:
+    """
+    Exibe um único line plot com múltiplas linhas (hue) em relação a x_col.
+    
+    NOTA: O DataFrame de entrada (df) deve estar no formato 'long' (longitudinal), 
+    contendo as colunas x_col, y_col e hue_col.
+
+    Params:
+        df (DataFrame): DataFrame de entrada (já no formato long).
+        x_col (str): Nome da coluna para o eixo X (ex: 'dia').
+        y_col (str): Nome da coluna para o eixo Y (ex: 'OTD (%)').
+        hue_col (str): Nome da coluna que define as diferentes linhas (ex: 'Cenário').
+        path (str): Caminho para salvar a imagem (opcional).
+        titulo (str): Título principal do gráfico.
+        ax (matplotlib axis): Eixo para plotar. Se None, cria novo.
+    """
+    try:
+        if ax is None:
+            # Cria a figura e o eixo, já que será um gráfico único
+            fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # 1. Gera o lineplot no formato longitudinal
+        sns.lineplot(
+            data=df, 
+            x=x_col, 
+            y=y_col, 
+            hue=hue_col, 
+            marker='o',
+            dashes=False,
+            ax=ax
+        )
+        
+        # 2. Configuração de Títulos e Rótulos
+        ax.set_title(titulo, fontsize=16, pad=20)
+        ax.set_xlabel(x_col.replace('_', ' ').title(), fontsize=12)
+        ax.set_ylabel(y_col, fontsize=12)
+        ax.grid(True, linestyle='--', alpha=0.7)
+        
+        # Ajusta a legenda
+        ax.legend(title=hue_col,)
+
+        plt.tight_layout()
+
+        # Salva ou exibe o gráfico
+        if path:
+            plt.savefig(path, bbox_inches="tight")
+
+        if 'fig' in locals():
+            plt.show()
+
+    except Exception as e:
+        print(f"Erro ao gerar o gráfico: {e}")
+        return
+
+
+def plot_performance(
+    df_stacked: pd.DataFrame, 
+    df_plot: pd.DataFrame,
+    coluna_linha: str # NOVO PARÂMETRO
+):
+    """
+    Gera gráfico de barras empilhadas (corrigidos/não corrigidos) 
+    com linha da economia média de tempo por dia.
+
+    Parâmetros:
+        df_stacked (pd.DataFrame): colunas ['dia','Corrigido','Não Corrigido']
+        df_plot (pd.DataFrame): colunas ['dia', 'media_economia', ...]
+        coluna_linha (str): O nome REAL da coluna de média no df_plot (ex: 'media_economia')
+    """
+    fig, ax1 = plt.subplots(figsize=(14,4))
+    ax2 = ax1.twinx()
+
+    # Paleta
+    cor_nao   = "#A9A9A9"   
+    cor_corr  = "#E7875A"   
+    cor_linha = "#1E90FF"   
+
+    # Barras empilhadas
+    ax1.bar(df_stacked['dia'], df_stacked['Nao Corrigido'], 0.85, 
+            label='Não Corrigido', color=cor_nao)
+    ax1.bar(df_stacked['dia'], df_stacked['Corrigido'], 0.85, 
+            bottom=df_stacked['Nao Corrigido'], label='Corrigido', color=cor_corr)
+
+    # Linha média economia (USANDO O NOVO PARÂMETRO)
+    ax2.plot(df_plot['dia'], df_plot[coluna_linha], marker='o', 
+             color=cor_linha, linewidth=2.5, label='Média Economia (min)')
+
+    # Labels e eixos
+    ax1.set_xlabel("Dia da Simulação")
+    ax1.set_ylabel("Volume de Pedidos", fontweight='bold')
+    ax2.set_ylabel("Média Economia (min)", color=cor_linha, fontweight='bold')
+    ax2.tick_params(axis='y', labelcolor=cor_linha)
+
+    # Estilo geral
+    ax1.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.title("Performance Diária: Qtde de Correções x Economia Média (Linha)", fontsize=14, fontweight='bold')
+
+    # Legenda unificada
+    h1,l1=ax1.get_legend_handles_labels(); h2,l2=ax2.get_legend_handles_labels()
+    ax1.legend(h1+h2, l1+l2, frameon=True)
+
+    plt.tight_layout()
+    plt.show()
+
 
