@@ -1,15 +1,27 @@
+"""Aplicação Streamlit"""
 import streamlit as st
 import pandas as pd
 import numpy as np
 import mlflow
-import requests
-import json
-import time
-import subprocess
+from datetime import timedelta, datetime
 import os
 from typing import Optional, Dict, Any
-import sys
-import socket
+from dotenv import load_dotenv
+import dagshub
+import warnings
+
+# warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Variáveis de ambiente
+load_dotenv()
+DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME")
+DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN")
+DAGSHUB_REPO = os.getenv("REPO_NAME")
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+MODEL_URI = os.getenv("MLFLOW_MODEL_URI")
+
 
 # Page configuration
 st.set_page_config(
@@ -132,7 +144,7 @@ st.markdown("""
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
     
-    /* Server status indicators */
+    /* Model status indicators */
     .server-status {
         display: flex;
         align-items: center;
@@ -160,15 +172,6 @@ st.markdown("""
         50% { opacity: 0.5; }
     }
     
-    /* Server initialization section */
-    .server-init-card {
-        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-        border-radius: 16px;
-        padding: 2rem;
-        margin: 2rem 0;
-        border-left: 4px solid #3b82f6;
-    }
-    
     .warning-card {
         background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
         border-radius: 16px;
@@ -193,222 +196,116 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Constants
-CSV_PATH = "data/processed/dataframe_final.csv"
-MODEL_PATH = "../mlruns/models/rfr_model_v1"
-MLFLOW_URL = "http://127.0.0.1:5000"
-API_URL = "http://127.0.0.1:5000/invocations"
+CSV_PATH = "data/processed/amazon_delivery_processed.csv"
 
-def generate_random_input(
-    df: pd.DataFrame,
-    n_samples: int = 1,
-    random_state: Optional[int] = None
-) -> pd.DataFrame:
+@st.cache_resource
+def setup_mlflow():
+    """Configura a conexão com o MLflow Tracking Server (DAGsHub)."""
+    if 'MLFLOW_HOME' in os.environ:
+        del os.environ['MLFLOW_HOME']
+    if 'MLFLOW_TRACKING_URI' in os.environ:
+        del os.environ['MLFLOW_TRACKING_URI']
+
+
+    if DAGSHUB_USERNAME and DAGSHUB_TOKEN and DAGSHUB_REPO and MLFLOW_TRACKING_URI:
+        try:
+            mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+            dagshub.init(
+                repo_owner=DAGSHUB_USERNAME, 
+                repo_name=DAGSHUB_REPO,
+                mlflow=True
+            )
+            
+            print(f"MLflow Tracking URI configurado para: {MLFLOW_TRACKING_URI}")
+            return True
+        except Exception as e:
+            print(f"Aviso: Erro ao inicializar DAGsHub/MLflow: {e}")
+            return False
+    else:
+        print("Aviso: Variáveis de ambiente DAGsHub/MLflow não configuradas. Pulando inicialização.")
+        return False
+
+@st.cache_resource
+def load_model():
     """
-    Generate random values within the [min, max] range of each numeric column in the DataFrame.
-    
-    Useful for creating artificial data to test a model with .predict().
+    Carrega o modelo em produção a partir das credenciais de conexão com o Dagshub/Mlflow.
+    """
+    try:
+        model_uri_clean = MODEL_URI.strip().strip('"').strip("'")
+        loaded_model = mlflow.pyfunc.load_model(model_uri_clean)
+        print(f"✅ Modelo '{model_uri_clean}' carregado com sucesso.")
+        return loaded_model
+    except Exception as e:
+        print(f"❌ Erro ao carregar modelo: {e}")
+        return None
 
-    Args:
-        df: DataFrame with only numeric columns.
-        n_samples: Number of rows to generate. Defaults to 1.
-        random_state: Seed for reproducibility. Defaults to None.
 
-    Returns:
-        DataFrame with n_samples rows and the same columns as df,
-        excluding 'Delivery_Time' if present.
+
+# funções de operação
+
+def generate_random_input(df: pd.DataFrame, n_samples: int = 1, random_state: Optional[int] = None) -> pd.DataFrame:
+    """
+    Gera valores aleatórios para as colunas de features, 
+    usando as estatísticas e distribuições do DataFrame de entrada.
     """
     rng = np.random.default_rng(seed=random_state)
-    random_data = {}
 
-    for col in df.select_dtypes(include=np.number).columns:
-        col_min = df[col].min()
-        col_max = df[col].max()
-        random_data[col] = rng.uniform(low=col_min, high=col_max, size=n_samples)
+    removed_columns = ["month", "holiday", "pickup_duration", "order_cicle_time", "Traffic",
+                   "weekend", "is_sunny_weather", "Delivery_Time", "Unnamed: 0", 'day_sin', 'day_cos', 'month_sin', 'month_cos']
 
-    random_df = pd.DataFrame(random_data)
+    features_df = df.drop(columns=[c for c in removed_columns if c in df.columns], errors='ignore')
+    random_data: Dict[str, Any] = {}
 
-    # Remove 'Delivery_Time' if it exists
-    if 'Delivery_Time' in random_df.columns:
-        random_df = random_df.drop(columns='Delivery_Time')
+    # --- Contínuas ---
+    distance_raw = rng.normal(9.72, 5.59, size=n_samples)
+    distance_clipped = np.round(np.abs(distance_raw),2)
+    random_data['delivery_distance'] = distance_clipped.item()
+    random_data['Agent_Rating'] = np.round(rng.normal(4.63, 0.32, size=n_samples).item(),2)
+    age_clipped = np.clip(rng.normal(27.0, 5.76, size=n_samples), 18, 60).item()
+    random_data['Agent_Age'] = int(age_clipped)
+    
 
-    return random_df
+    # --- Categóricas ---
+    random_data['Traffic']= rng.choice(['High', 'Jam', 'Low', 'Medium'], size=n_samples).item()
+    random_data['Vehicle']= rng.choice(['motorcycle', 'van', 'scooter'], size=n_samples).item()
+    random_data['Weather']= rng.choice(['Sunny', 'Stormy', 'Sandstorms', 'Cloudy', 'Fog', 'Windy'], size=n_samples).item()
+    random_data['Area'] = rng.choice(['Urban', 'Metropolitian', 'Other', 'Semi-Urban'], size=n_samples).item()
+    
 
+    # --- Binária ---
+    random_data['is_grocery'] = rng.choice([0, 1], size=n_samples).item()
+    random_data['jam_or_high_traffic'] =  1 if random_data['Traffic'] in ['High', 'Jam'] else 0
+    random_data['dist_gte_10'] = 1 if random_data['delivery_distance']>=10.0 else 0
+    
 
-def load_model(model_path: str):
-    """
-    Load a saved sklearn model from a local path or MLflow Tracking Server.
+    # --- Final ---
+    random_df = pd.DataFrame(random_data, index=range(n_samples))
+    for c in features_df.columns:
+        if c not in random_df: random_df[c] = 0
+    return random_df[features_df.columns]
 
-    Args:
-        model_path: Path to the saved model.
-
-    Returns:
-        Loaded sklearn model.
-    """
-    model = mlflow.sklearn.load_model(model_path)
-    return model
 
 
 def predict_model(model, input_df: pd.DataFrame) -> pd.Series:
     """
-    Make predictions using a loaded sklearn model.
+    Faz predições usando o modelo MLflow carregado localmente.
 
     Args:
-        model: Loaded sklearn model.
-        input_df: DataFrame containing input features for prediction.
+        model: Modelo MLflow (pyfunc) carregado.
+        input_df: DataFrame contendo as features de entrada para predição.
 
     Returns:
-        Predicted values for each row in input_df.
+        Transformação exponencial dos valores preditos para cada linha em input_df (em minutos).
     """
-    predictions = model.predict(input_df)
+
+    predictions = np.exp(model.predict(input_df))
     return pd.Series(predictions, index=input_df.index)
 
-
-def send_random_input_to_api(
-    df: pd.DataFrame,
-    url: str = API_URL,
-    n_samples: int = 1,
-    random_state: Optional[int] = None,
-    wait_server: int = 30
-) -> Dict[str, Any]:
-    """
-    Generate random input data based on the numeric ranges of a DataFrame,
-    convert it to JSON in MLflow 2.x format, and send it to a REST API endpoint.
-
-    Args:
-        df: DataFrame with numeric columns to base the random data on.
-        url: API endpoint to send the request. Defaults to local host.
-        n_samples: Number of random rows to generate. Defaults to 1.
-        random_state: Seed for reproducibility. Defaults to None.
-        wait_server: Max seconds to wait for server to be ready.
-
-    Returns:
-        JSON response from the API.
-    """
-    # Generate random input
-    x_fake = generate_random_input(df, n_samples=n_samples, random_state=random_state)
-
-    # Convert to JSON payload (MLflow 2.x expects {"dataframe_split": ...})
-    payload = {"dataframe_split": json.loads(x_fake.to_json(orient="split"))}
-
-    # Wait until server is ready
-    start = time.time()
-    while time.time() - start < wait_server:
-        try:
-            r = requests.get(url.replace("/invocations", "/ping"))
-            if r.status_code in (200, 404, 405):  # Server is ready
-                break
-        except requests.exceptions.ConnectionError:
-            time.sleep(1)
-    else:
-        print("❌ Server did not start within the wait time.")
-        return {"error": "Server not ready"}
-
-    # Send POST request
-    try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        print(f"❌ Request failed: {e}")
-        return {"error": str(e)}
-
-
-def check_server_status(url: str, timeout: int = 5) -> bool:
-    """
-    Check if a server is running and responding.
-    
-    Args:
-        url: Server URL to check.
-        timeout: Request timeout in seconds.
-        
-    Returns:
-        True if server is responding, False otherwise.
-    """
-    try:
-        response = requests.get(url, timeout=timeout)
-        return response.status_code in [200, 404, 405]  # Server is responding
-    except requests.exceptions.RequestException:
-        return False
-
-
-def wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            with socket.create_connection((host, port), timeout=2):
-                return True
-        except OSError:
-            time.sleep(1)
-    return False
-
-def start_server(script_name: str, host: str, port: int) -> bool:
-    try:
-        process = subprocess.Popen(
-            [sys.executable, script_name],
-            cwd="src",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        # st.info(f"Iniciando {script_name} (PID={process.pid})...")
-        
-        if wait_for_port(host, port):
-            # st.success(f"{script_name} está pronto em {host}:{port}")
-            return True
-        # else:
-        #     st.error(f"{script_name} não respondeu em {host}:{port} dentro do timeout")
-        #     return False
-    except Exception as e:
-        st.error(f"Erro ao iniciar {script_name}: {e}")
-        return False
-
-# def start_mlflow_server() -> bool:
-#     """
-#     Start MLflow server using the mlflow_server.py script.
-    
-#     Returns:
-#         True if server start command was executed successfully, False otherwise.
-#     """
-#     try:
-#         # Change to src directory and run the script
-#         subprocess.Popen(
-#             ["python", "mlflow_server.py"],
-#             cwd="src",
-#             stdout=subprocess.PIPE,
-#             stderr=subprocess.PIPE
-#         )
-#         return True
-#     except Exception as e:
-#         st.error(f"Error starting MLflow server: {str(e)}")
-#         return False
-
-
-# def start_api_server() -> bool:
-#     """
-#     Start API server using the api_server.py script.
-    
-#     Returns:
-#         True if server start command was executed successfully, False otherwise.
-#     """
-#     try:
-#         # Change to src directory and run the script
-#         subprocess.Popen(
-#             ["python", "api_server.py"],
-#             cwd="src",
-#             stdout=subprocess.PIPE,
-#             stderr=subprocess.PIPE
-#         )
-#         return True
-#     except Exception as e:
-#         st.error(f"Error starting API server: {str(e)}")
-#         return False
 
 
 def load_data() -> Optional[pd.DataFrame]:
     """
-    Load the processed dataframe from the specified CSV path.
-    
-    Returns:
-        Loaded DataFrame or None if error occurred.
+    Carrega o DataFrame processado do caminho CSV especificado.
     """
     try:
         df = pd.read_csv(CSV_PATH)
@@ -417,21 +314,18 @@ def load_data() -> Optional[pd.DataFrame]:
             df = df.drop('Unnamed: 0', axis=1)
         return df
     except FileNotFoundError:
-        st.error(f"❌ CSV file not found at: {CSV_PATH}")
+        st.error(f"❌ Arquivo CSV não encontrado em: {CSV_PATH}")
         return None
     except Exception as e:
-        st.error(f"❌ Error loading CSV: {str(e)}")
+        st.error(f"❌ Erro ao carregar CSV: {str(e)}")
         return None
 
 
 def main():
-    """Main application function."""
+    """Função principal da aplicação."""
     # Title and subtitle
     st.markdown('<h1 class="main-title">🚚 Order Prediction</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">Get instant delivery time predictions for your orders</p>', unsafe_allow_html=True)
-    start_server("mlflow_server.py", host="127.0.0.1", port=5000)
-    start_server("api_server.py", host="127.0.0.1", port=8000)
-
+    st.markdown('<p class="subtitle">Obtenha predições instantâneas do tempo de entrega para seus pedidos</p>', unsafe_allow_html=True)
 
     # Initialize session state
     if 'random_data' not in st.session_state:
@@ -442,125 +336,116 @@ def main():
         st.session_state.df_final = load_data()
     if 'message_content' not in st.session_state:
         st.session_state.message_content = None
+    if 'model' not in st.session_state:
+        st.session_state.model = load_model()
 
-    # Check server status
-    mlflow_online = check_server_status(f"{MLFLOW_URL}/ping")
-    api_online = check_server_status(API_URL)
+    model_loaded = st.session_state.model is not None
     
     # Action buttons
     col1, col2 = st.columns(2, gap="large")
     
     with col1:
-        if st.button("📋 Create Order", use_container_width=True, type="primary"):
+        if st.button("📋 Criar Pedido", width='stretch', type="primary"):
             if st.session_state.df_final is not None:
-                with st.spinner("Generating random order data..."):
+                with st.spinner("Gerando dados de pedido aleatórios..."):
+              
                     st.session_state.random_data = generate_random_input(
                         st.session_state.df_final, 
                         n_samples=1, 
-                        random_state=42
+                        random_state=None # Use None para dados diferentes
                     )
+                    st.session_state.prediction_result = None # Limpa a predição anterior
                     st.session_state.message_content = "order_created"
-                st.success("✅ Order created successfully!")
+                st.success("✅ Pedido criado com sucesso!")
             else:
-                st.error("❌ Could not load data. Please check if the CSV file exists.")
+                st.error("❌ Não foi possível carregar os dados. Verifique se o arquivo CSV existe.")
     
     with col2:
-        if st.button("🔮 Get Prediction", use_container_width=True, type="secondary"):
-            if not (mlflow_online and api_online):
-                st.error("❌ Servers are not online. Please start MLflow and API servers first.")
-            elif st.session_state.random_data is not None:
-                with st.spinner("Getting prediction from API..."):
-                    response = send_random_input_to_api(
-                        st.session_state.df_final,
-                        n_samples=1
-                    )
-                    
-                    if 'error' not in response:
-                        # Extract prediction from response
-                        if isinstance(response, list) and len(response) > 0:
-                            prediction = response[0]
-                        elif isinstance(response, dict) and 'predictions' in response:
-                            prediction = response['predictions'][0]
-                        else:
-                            prediction = response
-                        
-                        st.session_state.prediction_result = prediction
-                        st.session_state.message_content = "prediction_ready"
-                        st.success("🎯 Prediction completed!")
-                    else:
-                        st.error(f"❌ API Error: {response['error']}")
+        if st.button("🔮 Obter Predição", width='stretch', type="secondary"):
+            if not model_loaded:
+                st.error("❌ O modelo MLflow não foi carregado. Verifique as variáveis de ambiente e o status do servidor MLflow Tracking.")
+            elif st.session_state.random_data is None:
+                st.warning("⚠️ Por favor, crie um pedido primeiro!")
             else:
-                st.warning("⚠️ Please create an order first!")
-    
+                with st.spinner("Obtendo predição do modelo em produção..."):
+                    try:
+                        # Chamada direta à função de predição local
+                        predictions = predict_model(st.session_state.model, st.session_state.random_data)
+                        
+                        if not predictions.empty:
+                            prediction = predictions.iloc[0]
+                            st.session_state.prediction_result = prediction
+                            st.session_state.message_content = "prediction_ready"
+                            st.success("🎯 Predição concluída!")
+                        else:
+                             st.error("❌ A predição retornou um resultado vazio.")
+                             st.session_state.prediction_result = None
+                             
+                    except Exception as e:
+                        st.error(f"❌ Erro ao fazer a predição: {str(e)}")
+                        st.session_state.prediction_result = None
+
+
     # Message box
     with st.container():
         if st.session_state.message_content is None:
             # Empty message box
-            st.markdown('<div class="message-box empty">Click "Create Order" to generate order data or check server status below</div>', unsafe_allow_html=True)
+            st.markdown('<div class="message-box empty">Clique "Criar Pedido" para gerar dados e depois "Obter Predição"</div>', unsafe_allow_html=True)
         
         elif st.session_state.message_content == "order_created":
             # Show order data
             st.markdown('<div class="message-box">', unsafe_allow_html=True)
-            st.markdown('<div class="card-title">📊 Generated Order Data</div>', unsafe_allow_html=True)
+            st.markdown('<div class="card-title">📊 Dados do Pedido Gerado</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
             
             # Show dataframe right after the message box
-            st.dataframe(st.session_state.random_data, use_container_width=True, hide_index=True)
+            st.dataframe(st.session_state.random_data, width='stretch', hide_index=True)
         
         elif st.session_state.message_content == "prediction_ready":
             # Show prediction result
-            # Format prediction value
             try:
-                pred_value = float(st.session_state.prediction_result)
-                formatted_pred = f"{pred_value:.2f}"
+                pred_value = int(np.array(st.session_state.prediction_result).flat[0])
+                minutos = timedelta(minutes=pred_value)
+                hora_atual = datetime.now()
+                hora_chegada = hora_atual + minutos
+                formatted_pred = hora_chegada.strftime('%H:%M')
+                formatted_min = str(pred_value)
+
             except:
-                formatted_pred = str(st.session_state.prediction_result)
+                print(f"Erro no cálculo da hora de chegada: {e}")
+                formatted_pred = "N/A"
+                pred_value = 0.0 # 
             
             st.markdown(f'''
             <div class="message-box">
-                <div class="card-title">🎯 Prediction Result</div>
-                <div class="prediction-result">Your order will arrive in: {formatted_pred} minutes ⏱️</div>
+                <div class="card-title">🎯 Resultado da Predição</div>
+                <div class="prediction-result">O pedido chegará às {formatted_pred}h.<br>
+                Tempo total: {formatted_min} minutos. ⏱️</div>
             </div>
             ''', unsafe_allow_html=True)
     
-    # Server Status Section (moved to bottom)
+    # Model Status Section (simplificado para refletir o carregamento do modelo)
     st.markdown("---")
-    st.markdown("### 🖥️ Server Status")
+    st.markdown("### ⚙️ Status do Modelo MLflow")
     
-    col1, col2 = st.columns(2)
+    status_class = "status-online" if model_loaded else "status-offline"
+    status_text = "🟢 Carregado" if model_loaded else "🔴 Offline"
     
-    with col1:
-        st.markdown('<div class="server-status">', unsafe_allow_html=True)
-        status_class = "status-online" if mlflow_online else "status-offline"
-        status_text = "🟢 Online" if mlflow_online else "🔴 Offline"
-        st.markdown(f'<div class="status-dot {status_class}"></div>', unsafe_allow_html=True)
-        st.write(f"**MLflow Server:** {status_text}")
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<div class="server-status">', unsafe_allow_html=True)
+    st.markdown(f'<div class="status-dot {status_class}"></div>', unsafe_allow_html=True)
+    st.write(f"**Status do Modelo (MLflow):** {status_text}")
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    with col2:
-        st.markdown('<div class="server-status">', unsafe_allow_html=True)
-        status_class = "status-online" if api_online else "status-offline"
-        status_text = "🟢 Online" if api_online else "🔴 Offline"
-        st.markdown(f'<div class="status-dot {status_class}"></div>', unsafe_allow_html=True)
-        st.write(f"**API Server:** {status_text}")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Show server initialization help only if servers are offline
-    if not (mlflow_online and api_online):
-        with st.expander("🚀 Need help starting servers?", expanded=False):
-            st.markdown("**Start servers manually in your terminal:**")
-            st.code("""
-# Terminal 1: Start MLflow Server
-cd your-project-directory
-python src/mlflow_server.py
-
-# Terminal 2: Start API Server (wait for MLflow to be ready first)
-cd your-project-directory  
-python src/api_server.py
-            """, language="bash")
-            
-            if st.button("🔄 Refresh Server Status"):
-                st.rerun()
+    if not model_loaded:
+        st.warning(f"""
+        **Aviso:** Não foi possível carregar o modelo. 
+                   Verifique as credenciais do modelo em produção.
+  
+        """)
+        if st.button("🔄 Tentar Recarregar o Modelo"):
+            st.cache_resource.clear()
+            st.session_state.model = load_model()
+            st.rerun()
 
 
 if __name__ == "__main__":
