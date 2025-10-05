@@ -44,7 +44,6 @@ We also utilized Simpy for discrete-event simulation to model and analyze variou
 │   └── processed/              # Cleaned and transformed data
 │   └── simulation/             # Simulation results
 ├── notebooks/                  # Notebooks
-│   ├── 01_EDA                  # Exploratory Data Analysis (EDA)
 │   ├── 02_EDA                  # Exploratory Data Analysis (EDA)
 │   ├── 02_MODEL_VALIDATION     # ML Process Analysis
 │   └── 02_SIMULATION.ipynb     # Simulation Data Analysis
