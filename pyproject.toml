@@ -6,11 +6,11 @@ authors = [
     "ederray <eder.ray@gmail.com>"  # <-- CORREÇÃO: Formato String
 ]
 readme = "README.md"
+package-mode = false 
+packages = []
 
 [tool.poetry.dependencies]
 python = ">=3.11"
-# --- SUAS DEPENDÊNCIAS EXISTENTES MOVIDAS ---
-# RECOMENDAÇÃO: Use o formato simples (sem o "==") para deixar o Poetry resolver:
 asttokens = "3.0.0"
 colorama = "0.4.6"
 comm = "0.2.3"
@@ -19,11 +19,7 @@ tornado = "6.5.2"
 traitlets = "5.14.3"
 tzdata = "2025.2"
 wcwidth = "0.2.13"
-
-# NOVAS DEPENDÊNCIAS QUE VOCÊ PRECISA INSTALAR
-mlflow = "^2.12.2"  # Usando uma versão recente compatível com Python 3.11
-
-# --- DEPENDÊNCIAS DE ANÁLISE/ML COM RANGES ---
+mlflow = "^2.12.2"
 matplotlib = ">=3.10.6,<4.0.0"
 seaborn = ">=0.13.2,<0.14.0"
 plotly = ">=6.3.0,<7.0.0"
@@ -45,9 +41,13 @@ nbformat = "^5.10.4"
 pydot = "^4.0.1"
 joblib = "^1.5.2"
 streamlit = "^1.50.0"
+pandas = "^2.3.3"
+numpy = "^2.3.3"
+scikit-learn = "^1.4.2"
+
+
 
 [tool.poetry.group.dev.dependencies]
-# FERRAMENTAS DE DESENVOLVIMENTO
 black = "^24.3.0"
 isort = "^5.13.2"
 flake8 = "^7.0.0"
